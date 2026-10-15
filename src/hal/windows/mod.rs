@@ -254,40 +254,48 @@ impl LightingController for WindowsLightingController {
     fn set_zone_lighting(&mut self, zone: RgbZone, color: RgbColor, brightness: u8) -> Result<(), String> {
         let color_code = color.to_u8();
 
+        // Hardware firmware accepts brightness in range 0..50 (50 = 100% max hardware brightness)
+        // Values > 50 cause the firmware to reject the packet and shut off the LEDs!
+        let hw_brightness = if brightness == 0 || color == RgbColor::Off {
+            0
+        } else {
+            ((brightness as f32 / 100.0) * 50.0).round().clamp(1.0, 50.0) as u8
+        };
+
         match zone {
             RgbZone::Keyboard => {
-                if self.last_kb_color == Some(color) && self.last_kb_brightness == Some(brightness) {
+                if self.last_kb_color == Some(color) && self.last_kb_brightness == Some(hw_brightness) {
                     return Ok(());
                 }
                 self.last_kb_color = Some(color);
-                self.last_kb_brightness = Some(brightness);
+                self.last_kb_brightness = Some(hw_brightness);
 
                 for path in &self.kb_paths {
-                    if color == RgbColor::Off || brightness == 0 {
+                    if color == RgbColor::Off || hw_brightness == 0 {
                         let off_pkt = make_static_packet(0x08, 0, 0);
                         send_raw_packet(path, &off_pkt);
                     } else {
-                        let pkt = make_static_packet(0x08, brightness, color_code);
+                        let pkt = make_static_packet(0x08, hw_brightness, color_code);
                         send_raw_packet(path, &pkt);
                     }
                 }
             }
             RgbZone::RearBar => {
-                if self.last_bar_color == Some(color) && self.last_bar_brightness == Some(brightness) {
+                if self.last_bar_color == Some(color) && self.last_bar_brightness == Some(hw_brightness) {
                     return Ok(());
                 }
                 self.last_bar_color = Some(color);
-                self.last_bar_brightness = Some(brightness);
+                self.last_bar_brightness = Some(hw_brightness);
 
                 for path in &self.bar_paths {
-                    if color == RgbColor::Off || brightness == 0 {
+                    if color == RgbColor::Off || hw_brightness == 0 {
                         let off_pkt1 = make_static_packet(0x08, 0, 0);
                         let off_pkt2 = make_static_packet(0x0B, 0, 0);
                         send_raw_packet(path, &off_pkt1);
                         send_raw_packet(path, &off_pkt2);
                     } else {
-                        let pkt1 = make_static_packet(0x08, brightness, color_code);
-                        let pkt2 = make_static_packet(0x0B, 0x64, color_code);
+                        let pkt1 = make_static_packet(0x08, hw_brightness, color_code);
+                        let pkt2 = make_static_packet(0x0B, hw_brightness, color_code);
                         send_raw_packet(path, &pkt1);
                         send_raw_packet(path, &pkt2);
                     }
@@ -310,7 +318,7 @@ fn make_static_packet(cmd: u8, brightness: u8, color_idx: u8) -> [u8; 70] {
     pkt[2] = 0x00;
     pkt[3] = 0x01; // Pure Solid Static
     pkt[4] = 0x01; // Speed 1
-    pkt[5] = brightness;
+    pkt[5] = brightness; // 0..50
     pkt[6] = color_idx;
     pkt[7] = 0x01; // Direction 1
     let sum: u32 = pkt[1..8].iter().map(|&x| x as u32).sum();
