@@ -1,0 +1,479 @@
+import { Button, Slider, Switch } from "std-widgets.slint";
+
+export component ColorChip inherits TouchArea {
+    in property <color> chip_color;
+    in property <bool> is_selected: false;
+    width: 36px;
+    height: 36px;
+    mouse-cursor: pointer;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 8px;
+        background: root.chip_color;
+        border-width: root.is_selected ? 3px : 1px;
+        border-color: root.is_selected ? #ffffff : #333846;
+    }
+}
+
+export component ModeButton inherits TouchArea {
+    in property <string> title;
+    in property <string> icon;
+    in property <bool> is_active: false;
+    height: 44px;
+    mouse-cursor: pointer;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 10px;
+        background: root.is_active ? #00ffa3.transparentize(85%) : #1a1d26;
+        border-width: root.is_active ? 2px : 1px;
+        border-color: root.is_active ? #00ffa3 : #2b3040;
+
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            spacing: 6px;
+            alignment: center;
+
+            Text {
+                text: root.icon;
+                font-size: 15px;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.title;
+                font-size: 13px;
+                font-weight: 700;
+                color: root.is_active ? #00ffa3 : #d1d5db;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "AORUS 16X Control";
+    width: 700px;
+    height: 740px;
+    background: #0d0f14;
+    default-font-family: "Segoe UI";
+
+    in-out property <string> cpu_temp: "-- °C";
+    in-out property <string> gpu_temp: "-- °C";
+    in-out property <string> fan_rpm: "-- RPM";
+    in-out property <int> fan_speed: 60;
+    in-out property <int> kb_brightness: 100;
+    in-out property <string> active_mode: "Normal";
+    in-out property <string> active_kb_color: "Blue";
+    in-out property <string> active_bar_color: "Blue";
+    in-out property <bool> lightbar_enabled: true;
+    in-out property <bool> battery_limit: true;
+
+    callback set_fan_mode(string);
+    callback set_custom_fan(int);
+    callback set_keyboard_color(string);
+    callback set_keyboard_brightness(int);
+    callback set_lightbar_color(string);
+    callback toggle_lightbar(bool);
+    callback toggle_battery_limit(bool);
+
+    VerticalLayout {
+        padding: 22px;
+        spacing: 16px;
+
+        // Header with live sensors
+        HorizontalLayout {
+            alignment: space-between;
+
+            VerticalLayout {
+                spacing: 2px;
+                Text {
+                    text: "AORUS 16X";
+                    font-size: 20px;
+                    font-weight: 800;
+                    color: #ffffff;
+                }
+                Text {
+                    text: "Native Hardware & RGB Control";
+                    font-size: 11px;
+                    color: #6b7280;
+                }
+            }
+
+            // Live sensor badges
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    height: 36px;
+                    background: #161922;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #262c3d;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 6px;
+                        Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                        Text { text: root.cpu_temp; font-size: 13px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
+                    }
+                }
+
+                Rectangle {
+                    height: 36px;
+                    background: #161922;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #262c3d;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 6px;
+                        Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                        Text { text: root.gpu_temp; font-size: 13px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
+                    }
+                }
+
+                Rectangle {
+                    height: 36px;
+                    background: #161922;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #262c3d;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 6px;
+                        Text { text: "FAN"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                        Text { text: root.fan_rpm; font-size: 13px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+
+        // Section 1: Fan & Power Profile
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 12px;
+
+                Text {
+                    text: "FAN & POWER MODES";
+                    font-size: 11px;
+                    font-weight: 800;
+                    color: #9ca3af;
+                    letter-spacing: 1px;
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    ModeButton {
+                        title: "Quiet";
+                        icon: "🍃";
+                        is_active: root.active_mode == "Quiet";
+                        clicked => {
+                            root.active_mode = "Quiet";
+                            root.set_fan_mode("Quiet");
+                        }
+                    }
+                    ModeButton {
+                        title: "Normal";
+                        icon: "⚡";
+                        is_active: root.active_mode == "Normal";
+                        clicked => {
+                            root.active_mode = "Normal";
+                            root.set_fan_mode("Normal");
+                        }
+                    }
+                    ModeButton {
+                        title: "Gaming";
+                        icon: "🎮";
+                        is_active: root.active_mode == "Gaming";
+                        clicked => {
+                            root.active_mode = "Gaming";
+                            root.set_fan_mode("Gaming");
+                        }
+                    }
+                    ModeButton {
+                        title: "Turbo";
+                        icon: "🚀";
+                        is_active: root.active_mode == "Turbo";
+                        clicked => {
+                            root.active_mode = "Turbo";
+                            root.set_fan_mode("Turbo");
+                        }
+                    }
+                }
+
+                // Custom fan speed slider
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: "Manual Fan:";
+                        font-size: 12px;
+                        color: #9ca3af;
+                        vertical-alignment: center;
+                        width: 80px;
+                    }
+                    Slider {
+                        minimum: 30;
+                        maximum: 100;
+                        value: root.fan_speed;
+                        changed(val) => {
+                            root.fan_speed = Math.round(val);
+                        }
+                    }
+                    Text {
+                        text: "\{root.fan_speed}%";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #ffffff;
+                        vertical-alignment: center;
+                        width: 42px;
+                    }
+                    Button {
+                        text: "Apply";
+                        clicked => {
+                            root.active_mode = "Manual";
+                            root.set_custom_fan(root.fan_speed);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 2: Keyboard Static RGB
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "⌨️  KEYBOARD RGB (SOLID STATIC)";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #00ffa3;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "Current: " + root.active_kb_color;
+                        font-size: 11px;
+                        color: #6b7280;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Color Presets for Keyboard
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    ColorChip {
+                        chip_color: #00a2ff;
+                        is_selected: root.active_kb_color == "Blue";
+                        clicked => { root.active_kb_color = "Blue"; root.set_keyboard_color("Blue"); }
+                    }
+                    ColorChip {
+                        chip_color: #ff1a40;
+                        is_selected: root.active_kb_color == "Red";
+                        clicked => { root.active_kb_color = "Red"; root.set_keyboard_color("Red"); }
+                    }
+                    ColorChip {
+                        chip_color: #10b981;
+                        is_selected: root.active_kb_color == "Green";
+                        clicked => { root.active_kb_color = "Green"; root.set_keyboard_color("Green"); }
+                    }
+                    ColorChip {
+                        chip_color: #eab308;
+                        is_selected: root.active_kb_color == "Yellow";
+                        clicked => { root.active_kb_color = "Yellow"; root.set_keyboard_color("Yellow"); }
+                    }
+                    ColorChip {
+                        chip_color: #a855f7;
+                        is_selected: root.active_kb_color == "Purple";
+                        clicked => { root.active_kb_color = "Purple"; root.set_keyboard_color("Purple"); }
+                    }
+                    ColorChip {
+                        chip_color: #f97316;
+                        is_selected: root.active_kb_color == "Orange";
+                        clicked => { root.active_kb_color = "Orange"; root.set_keyboard_color("Orange"); }
+                    }
+                    ColorChip {
+                        chip_color: #f3f4f6;
+                        is_selected: root.active_kb_color == "White";
+                        clicked => { root.active_kb_color = "White"; root.set_keyboard_color("White"); }
+                    }
+                    ColorChip {
+                        chip_color: #111317;
+                        is_selected: root.active_kb_color == "Off";
+                        clicked => { root.active_kb_color = "Off"; root.set_keyboard_color("Off"); }
+                    }
+                }
+
+                // Brightness slider
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: "Brightness:";
+                        font-size: 12px;
+                        color: #9ca3af;
+                        vertical-alignment: center;
+                        width: 80px;
+                    }
+                    Slider {
+                        minimum: 0;
+                        maximum: 100;
+                        value: root.kb_brightness;
+                        changed(val) => {
+                            root.kb_brightness = Math.round(val);
+                            root.set_keyboard_brightness(root.kb_brightness);
+                        }
+                    }
+                    Text {
+                        text: "\{root.kb_brightness}%";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #ffffff;
+                        vertical-alignment: center;
+                        width: 42px;
+                    }
+                }
+            }
+        }
+
+        // Section 3: Rear LightBar (Beacon)
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "✨  REAR LIGHTBAR (AORUS BEACON)";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #38bdf8;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: "Power:"; font-size: 12px; color: #9ca3af; vertical-alignment: center; }
+                        Switch {
+                            checked: root.lightbar_enabled;
+                            toggled => {
+                                root.lightbar_enabled = self.checked;
+                                root.toggle_lightbar(self.checked);
+                            }
+                        }
+                    }
+                }
+
+                // Color Presets for LightBar
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    ColorChip {
+                        chip_color: #00a2ff;
+                        is_selected: root.active_bar_color == "Blue";
+                        clicked => { root.active_bar_color = "Blue"; root.set_lightbar_color("Blue"); }
+                    }
+                    ColorChip {
+                        chip_color: #ff1a40;
+                        is_selected: root.active_bar_color == "Red";
+                        clicked => { root.active_bar_color = "Red"; root.set_lightbar_color("Red"); }
+                    }
+                    ColorChip {
+                        chip_color: #10b981;
+                        is_selected: root.active_bar_color == "Green";
+                        clicked => { root.active_bar_color = "Green"; root.set_lightbar_color("Green"); }
+                    }
+                    ColorChip {
+                        chip_color: #eab308;
+                        is_selected: root.active_bar_color == "Yellow";
+                        clicked => { root.active_bar_color = "Yellow"; root.set_lightbar_color("Yellow"); }
+                    }
+                    ColorChip {
+                        chip_color: #a855f7;
+                        is_selected: root.active_bar_color == "Purple";
+                        clicked => { root.active_bar_color = "Purple"; root.set_lightbar_color("Purple"); }
+                    }
+                    ColorChip {
+                        chip_color: #f97316;
+                        is_selected: root.active_bar_color == "Orange";
+                        clicked => { root.active_bar_color = "Orange"; root.set_lightbar_color("Orange"); }
+                    }
+                    ColorChip {
+                        chip_color: #f3f4f6;
+                        is_selected: root.active_bar_color == "White";
+                        clicked => { root.active_bar_color = "White"; root.set_lightbar_color("White"); }
+                    }
+                    ColorChip {
+                        chip_color: #111317;
+                        is_selected: root.active_bar_color == "Off";
+                        clicked => { root.active_bar_color = "Off"; root.set_lightbar_color("Off"); }
+                    }
+                }
+            }
+        }
+
+        // Section 4: Battery Health Care
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            HorizontalLayout {
+                padding: 14px;
+                alignment: space-between;
+
+                VerticalLayout {
+                    spacing: 2px;
+                    Text {
+                        text: "BATTERY HEALTH CARE";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #9ca3af;
+                        letter-spacing: 1px;
+                    }
+                    Text {
+                        text: "Limit maximum charge to 80% to extend battery lifespan";
+                        font-size: 12px;
+                        color: #6b7280;
+                    }
+                }
+
+                Switch {
+                    checked: root.battery_limit;
+                    toggled => {
+                        root.battery_limit = self.checked;
+                        root.toggle_battery_limit(self.checked);
+                    }
+                }
+            }
+        }
+    }
+}
