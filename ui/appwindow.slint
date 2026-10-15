@@ -125,17 +125,19 @@ component CustomSlider inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "AORUS 16X Control";
-    width: 700px;
-    height: 740px;
+    width: 720px;
+    height: 860px;
     background: #0d0f14;
     default-font-family: "Segoe UI";
 
     in-out property <string> cpu_temp: "-- °C";
     in-out property <string> gpu_temp: "-- °C";
-    in-out property <string> fan_rpm: "-- RPM";
+    in-out property <string> fan1_rpm: "-- RPM";
+    in-out property <string> fan2_rpm: "-- RPM";
     in-out property <float> fan_speed: 60;
     in-out property <float> kb_brightness: 100;
     in-out property <string> active_mode: "Normal";
+    in-out property <string> active_gpu_mode: "Hybrid";
     in-out property <string> active_kb_color: "Blue";
     in-out property <string> active_bar_color: "Blue";
     in-out property <bool> lightbar_enabled: true;
@@ -143,6 +145,7 @@ export component AppWindow inherits Window {
 
     callback set_fan_mode(string);
     callback set_custom_fan(int);
+    callback set_gpu_mode(string);
     callback set_keyboard_color(string);
     callback set_keyboard_brightness(float);
     callback save_keyboard_brightness(float);
@@ -152,9 +155,9 @@ export component AppWindow inherits Window {
 
     VerticalLayout {
         padding: 22px;
-        spacing: 16px;
+        spacing: 14px;
 
-        // Header with live sensors
+        // Header with live sensors (CPU, GPU, FAN 1, FAN 2)
         HorizontalLayout {
             alignment: space-between;
 
@@ -173,9 +176,9 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // Live sensor badges
+            // 4 Live sensor badges
             HorizontalLayout {
-                spacing: 8px;
+                spacing: 6px;
 
                 Rectangle {
                     height: 36px;
@@ -184,11 +187,11 @@ export component AppWindow inherits Window {
                     border-width: 1px;
                     border-color: #262c3d;
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 6px;
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 5px;
                         Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.cpu_temp; font-size: 13px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
+                        Text { text: root.cpu_temp; font-size: 12px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
                     }
                 }
 
@@ -199,11 +202,11 @@ export component AppWindow inherits Window {
                     border-width: 1px;
                     border-color: #262c3d;
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 6px;
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 5px;
                         Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.gpu_temp; font-size: 13px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
+                        Text { text: root.gpu_temp; font-size: 12px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
                     }
                 }
 
@@ -214,11 +217,26 @@ export component AppWindow inherits Window {
                     border-width: 1px;
                     border-color: #262c3d;
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 6px;
-                        Text { text: "FAN"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.fan_rpm; font-size: 13px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 5px;
+                        Text { text: "FAN 1"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                        Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
+                    }
+                }
+
+                Rectangle {
+                    height: 36px;
+                    background: #161922;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #262c3d;
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 5px;
+                        Text { text: "FAN 2"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                        Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
                     }
                 }
             }
@@ -324,7 +342,69 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Section 2: Keyboard Static RGB
+        // Section 2: MUX Switch
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "🎮  GPU ÇALIŞMA MODU (MUX SWITCH)";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #c084fc;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "Aktif Donanım: " + root.active_gpu_mode;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8;
+                        vertical-alignment: center;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    ModeButton {
+                        title: "Hybrid (Optimus)";
+                        icon: "🔋";
+                        is_active: root.active_gpu_mode == "Hybrid";
+                        clicked => {
+                            root.active_gpu_mode = "Hybrid";
+                            root.set_gpu_mode("Hybrid");
+                        }
+                    }
+
+                    ModeButton {
+                        title: "Discrete (dGPU)";
+                        icon: "⚡";
+                        is_active: root.active_gpu_mode == "Discrete";
+                        clicked => {
+                            root.active_gpu_mode = "Discrete";
+                            root.set_gpu_mode("Discrete");
+                        }
+                    }
+                }
+
+                Text {
+                    text: "⚠️ MUX modu değişikliği donanım seviyesindedir. Etkili olması için sistemi yeniden başlatmanız gerekir.";
+                    font-size: 11px;
+                    color: #f59e0b;
+                }
+            }
+        }
+
+        // Section 3: Keyboard Static RGB
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -433,7 +513,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Section 3: Rear LightBar (Beacon)
+        // Section 4: Rear LightBar (Beacon)
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -515,7 +595,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Section 4: Battery Health Care
+        // Section 5: Battery Health Care
         Rectangle {
             background: #141720;
             border-radius: 12px;

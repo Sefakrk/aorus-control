@@ -25,7 +25,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // 3. Apply persisted configuration to hardware and UI immediately on startup
     {
-        let cfg = config.lock();
+        let mut cfg = config.lock();
 
         let mode_str = match cfg.fan_mode {
             FanMode::Quiet => "Quiet",
@@ -42,10 +42,19 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.set_lightbar_enabled(cfg.bar_enabled);
         main_window.set_battery_limit(cfg.battery_limit);
 
-        // Apply to hardware via HAL
+        // Apply fan and lighting to hardware via HAL
         let mut tc = thermal_controller.lock();
         let _ = tc.set_fan_mode(cfg.fan_mode);
         let _ = tc.set_battery_charge_limit(cfg.battery_limit);
+
+        // Constraint 8: Read REAL hardware MUX state on startup (not stale config)
+        if let Ok(real_gpu_mode) = tc.get_gpu_mode() {
+            main_window.set_active_gpu_mode(real_gpu_mode.to_name().into());
+            cfg.gpu_mode = real_gpu_mode;
+            let _ = cfg.save();
+        } else {
+            main_window.set_active_gpu_mode(cfg.gpu_mode.to_name().into());
+        }
 
         let mut lc = lighting_controller.lock();
         let _ = lc.set_zone_lighting(RgbZone::Keyboard, cfg.kb_color, cfg.kb_brightness);
@@ -181,7 +190,26 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 11. Battery Limit Callback
+    // 11. MUX Switch Callback
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
+
+        main_window.on_set_gpu_mode(move |mode_str| {
+            let mode = GpuMode::from_name(mode_str.as_str());
+
+            {
+                let mut cfg = cfg_clone.lock();
+                cfg.gpu_mode = mode;
+                let _ = cfg.save();
+            }
+
+            let mut tc = tc_clone.lock();
+            let _ = tc.set_gpu_mode(mode);
+        });
+    }
+
+    // 12. Battery Limit Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -198,8 +226,9 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 12. Non-blocking Background Telemetry Thread
+    // 13. Non-blocking Background Telemetry Thread
     // Does NOT hold the thermal_controller Mutex lock during WMI execution
+    // Separately updates FAN 1 and FAN 2 RPM
     // Sleep is at the END of the loop so initial telemetry appears instantly
     {
         let window_weak = main_window.as_weak();
@@ -213,8 +242,8 @@ fn main() -> Result<(), slint::PlatformError> {
                         if let Some(window) = weak.upgrade() {
                             window.set_cpu_temp(format!("{} \u{00B0}C", telemetry.cpu_temp).into());
                             window.set_gpu_temp(format!("{} \u{00B0}C", telemetry.gpu_temp).into());
-                            let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
-                            window.set_fan_rpm(format!("{} RPM", rpm).into());
+                            window.set_fan1_rpm(format!("{} RPM", telemetry.fan1_rpm).into());
+                            window.set_fan2_rpm(format!("{} RPM", telemetry.fan2_rpm).into());
                         }
                     });
                 }

@@ -16,6 +16,42 @@ impl Default for FanMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuMode {
+    Hybrid = 0,
+    Discrete = 1,
+}
+
+impl Default for GpuMode {
+    fn default() -> Self {
+        Self::Hybrid
+    }
+}
+
+impl GpuMode {
+    pub fn from_u8(val: u8) -> Self {
+        if val == 1 {
+            Self::Discrete
+        } else {
+            Self::Hybrid
+        }
+    }
+
+    pub fn to_name(self) -> &'static str {
+        match self {
+            Self::Hybrid => "Hybrid",
+            Self::Discrete => "Discrete",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "Discrete" => Self::Discrete,
+            _ => Self::Hybrid,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum RgbColor {
     Off = 0,

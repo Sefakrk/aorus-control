@@ -9,6 +9,8 @@ pub trait ThermalController: Send + Sync {
     #[allow(dead_code)]
     fn get_telemetry(&self) -> Result<TelemetryData, String>;
     fn set_battery_charge_limit(&mut self, enabled: bool) -> Result<(), String>;
+    fn get_gpu_mode(&self) -> Result<GpuMode, String>;
+    fn set_gpu_mode(&mut self, mode: GpuMode) -> Result<(), String>;
 }
 
 pub trait LightingController: Send + Sync {

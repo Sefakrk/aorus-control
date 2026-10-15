@@ -209,6 +209,47 @@ impl ThermalController for WindowsThermalController {
         run_powershell_silent(&script);
         Ok(())
     }
+
+    fn get_gpu_mode(&self) -> Result<GpuMode, String> {
+        let script = r#"
+            $get = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($get) {
+                $res = (Invoke-CimMethod -InputObject $get -MethodName GetPEG2orSG2 -ErrorAction SilentlyContinue).Data
+                if ($res -ne $null) {
+                    Write-Output "$res"
+                }
+            }
+        "#;
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Ok(val) = text.parse::<u8>() {
+            Ok(GpuMode::from_u8(val))
+        } else {
+            Err("Failed to read MUX status from WMI".to_string())
+        }
+    }
+
+    fn set_gpu_mode(&mut self, mode: GpuMode) -> Result<(), String> {
+        let val = mode as u8;
+        let script = format!(
+            r#"
+            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($set) {{
+                Invoke-CimMethod -InputObject $set -MethodName SetPEG2orSG2 -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
+            }}
+            "#,
+            val
+        );
+
+        run_powershell_silent(&script);
+        Ok(())
+    }
 }
 
 // ==========================================

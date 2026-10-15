@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use crate::hal::models::{FanMode, RgbColor};
+use crate::hal::models::{FanMode, GpuMode, RgbColor};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub bar_color: RgbColor,
     pub bar_enabled: bool,
     pub battery_limit: bool,
+    pub gpu_mode: GpuMode,
 }
 
 impl Default for AppConfig {
@@ -24,6 +25,7 @@ impl Default for AppConfig {
             bar_color: RgbColor::Blue,
             bar_enabled: true,
             battery_limit: true,
+            gpu_mode: GpuMode::Hybrid,
         }
     }
 }
