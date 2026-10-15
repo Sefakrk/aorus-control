@@ -172,3 +172,5 @@ C:\Users\sef\Desktop\Repolar\aorus-control/
 3. **Etkileşimli Fan Eğrisi Görselleştiricisi:**
    - 16 noktalı fabrika eğrilerinin arayüzde çizgi grafik veya adım tablosu olarak sunulması.
    - Özel fan eğrisi düzenleme kabiliyeti.
+
+
