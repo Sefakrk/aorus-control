@@ -14,6 +14,8 @@ use tray_icon::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 
 slint::include_modules!();
 
+const ICON_RGBA: &[u8] = include_bytes!("../assets/icon.rgba");
+
 const PWM_TABLE: [(u8, u8); 16] = [
     (25, 57),  (30, 68),  (35, 80),  (40, 91),
     (45, 103), (50, 114), (55, 125), (60, 137),
@@ -438,17 +440,12 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 17. System Tray Setup & Window Close Handler
+    // 17. System Tray Setup (Embedded In-Memory RGBA Icon - Zero File Path / CWD Dependencies!)
     let show_id;
     let quit_id;
     let _tray_icon;
 
     {
-        let icon_path = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|dir| dir.join("assets/icon.ico")))
-            .unwrap_or_else(|| "assets/icon.ico".into());
-
         let tray_menu = Menu::new();
         let show_item = MenuItem::new("Göster", true, None);
         let quit_item = MenuItem::new("Çıkış", true, None);
@@ -457,8 +454,8 @@ fn main() -> Result<(), slint::PlatformError> {
         show_id = show_item.id().clone();
         quit_id = quit_item.id().clone();
 
-        let icon_result = tray_icon::Icon::from_path(&icon_path, None)
-            .or_else(|_| tray_icon::Icon::from_path("assets/icon.ico", None));
+        // In-memory RGBA icon loaded from compile-time embedded bytes
+        let icon_result = tray_icon::Icon::from_rgba(ICON_RGBA.to_vec(), 256, 256);
 
         _tray_icon = icon_result.ok().and_then(|ico| {
             TrayIconBuilder::new()
@@ -470,14 +467,17 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // Window Close Intercept: Minimize to tray if enabled, or quit
+    let has_tray = _tray_icon.is_some();
+
+    // Window Close Intercept:
+    // SAFETY RULE: If tray icon failed to initialize, NEVER hide window! Close normally to avoid phantom zombie process.
     {
         let cfg_clone = config.clone();
         let window_weak = main_window.as_weak();
 
         main_window.window().on_close_requested(move || {
             let close_to_tray = cfg_clone.lock().close_to_tray;
-            if close_to_tray {
+            if has_tray && close_to_tray {
                 if let Some(w) = window_weak.upgrade() {
                     let _ = w.hide();
                 }
