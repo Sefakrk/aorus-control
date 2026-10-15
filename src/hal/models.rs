@@ -6,7 +6,7 @@ pub enum FanMode {
     Normal,
     Gaming,
     Turbo,
-    Manual(u8),
+    Custom,
 }
 
 impl Default for FanMode {
@@ -128,4 +128,6 @@ pub struct TelemetryData {
     pub gpu_temp: u8,
     pub fan1_rpm: u16,
     pub fan2_rpm: u16,
+    pub cpu_usage: u8,
+    pub gpu_usage: u8,
 }

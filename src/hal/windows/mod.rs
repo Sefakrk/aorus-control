@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::os::windows::process::CommandExt;
 use std::process::Command;
+use parking_lot::Mutex;
 use windows_sys::core::GUID;
 use windows_sys::Win32::Devices::DeviceAndDriverInstallation::*;
 use windows_sys::Win32::Devices::HumanInterfaceDevice::*;
@@ -10,6 +11,14 @@ use crate::hal::models::*;
 use crate::hal::{LightingController, ThermalController};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[repr(C)]
+#[derive(Default, Copy, Clone)]
+#[allow(non_snake_case)]
+struct FILETIME {
+    dwLowDateTime: u32,
+    dwHighDateTime: u32,
+}
 
 extern "system" {
     fn CreateFileW(
@@ -21,6 +30,12 @@ extern "system" {
         dwFlagsAndAttributes: u32,
         hTemplateFile: *mut c_void,
     ) -> *mut c_void;
+
+    fn GetSystemTimes(
+        lpIdleTime: *mut FILETIME,
+        lpKernelTime: *mut FILETIME,
+        lpUserTime: *mut FILETIME,
+    ) -> i32;
 }
 
 const GENERIC_READ: u32 = 0x80000000;
@@ -28,6 +43,62 @@ const GENERIC_WRITE: u32 = 0x40000000;
 const FILE_SHARE_READ: u32 = 1;
 const FILE_SHARE_WRITE: u32 = 2;
 const OPEN_EXISTING: u32 = 3;
+
+static PREV_CPU_TIMES: Mutex<Option<(u64, u64, u64)>> = Mutex::new(None);
+
+fn filetime_to_u64(ft: &FILETIME) -> u64 {
+    ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64)
+}
+
+fn calculate_cpu_usage() -> u8 {
+    let mut idle = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+
+    unsafe {
+        if GetSystemTimes(&mut idle, &mut kernel, &mut user) == 0 {
+            return 0;
+        }
+    }
+
+    let i = filetime_to_u64(&idle);
+    let k = filetime_to_u64(&kernel);
+    let u = filetime_to_u64(&user);
+
+    let mut lock = PREV_CPU_TIMES.lock();
+    if let Some((prev_i, prev_k, prev_u)) = *lock {
+        let diff_idle = i.saturating_sub(prev_i);
+        let diff_kernel = k.saturating_sub(prev_k);
+        let diff_user = u.saturating_sub(prev_u);
+        let diff_total = diff_kernel + diff_user;
+
+        *lock = Some((i, k, u));
+
+        if diff_total > 0 {
+            let busy = diff_total.saturating_sub(diff_idle);
+            ((busy as f64 / diff_total as f64) * 100.0).round().clamp(0.0, 100.0) as u8
+        } else {
+            0
+        }
+    } else {
+        *lock = Some((i, k, u));
+        0
+    }
+}
+
+fn fetch_gpu_usage() -> u8 {
+    let output = Command::new("nvidia-smi")
+        .args(["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        text.parse::<u8>().unwrap_or(0)
+    } else {
+        0
+    }
+}
 
 // ==========================================
 // 1. THERMAL CONTROLLER (WMI ACPI)
@@ -39,6 +110,38 @@ impl WindowsThermalController {
     pub fn new() -> Self {
         Self
     }
+}
+
+pub fn restore_auto_fans() {
+    let script = r#"
+        $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($set) {
+            Invoke-CimMethod -InputObject $set -MethodName SetFixedFanStatus -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetStepFanStatus -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetAutoFanStatus -Arguments @{ Data = [byte]1 } -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetFanModeNotify -Arguments @{ Data = [byte]1 } -ErrorAction SilentlyContinue | Out-Null
+        }
+    "#;
+    run_powershell_silent(script);
+}
+
+pub fn apply_pwm_speed(pwm: u8) {
+    let script = format!(
+        r#"
+        $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($set) {{
+            Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetQuietMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetAutoFanStatus -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetFixedFanStatus -Arguments @{{ Data = [byte]1 }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetStepFanStatus -Arguments @{{ Data = [byte]1 }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetFixedFanSpeed -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
+            Invoke-CimMethod -InputObject $set -MethodName SetGpuFanDuty -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
+        }}
+        "#,
+        pwm, pwm
+    );
+    run_powershell_silent(&script);
 }
 
 pub fn fetch_telemetry() -> Result<TelemetryData, String> {
@@ -85,11 +188,16 @@ pub fn fetch_telemetry() -> Result<TelemetryData, String> {
             }
         };
 
+        let cpu_pct = calculate_cpu_usage();
+        let gpu_pct = fetch_gpu_usage();
+
         Ok(TelemetryData {
             cpu_temp: cpu,
             gpu_temp: gpu,
             fan1_rpm: swap_rpm(raw1),
             fan2_rpm: swap_rpm(raw2),
+            cpu_usage: cpu_pct,
+            gpu_usage: gpu_pct,
         })
     } else {
         Err("Incomplete telemetry data from WMI".to_string())
@@ -157,8 +265,9 @@ impl ThermalController for WindowsThermalController {
                 }
                 "#
             }
-            FanMode::Manual(percent) => {
-                return self.set_custom_fan_speed(percent);
+            FanMode::Custom => {
+                // Custom curve will be dynamically applied by background telemetry loop
+                return Ok(());
             }
         };
 
@@ -169,24 +278,7 @@ impl ThermalController for WindowsThermalController {
     fn set_custom_fan_speed(&mut self, speed_percent: u8) -> Result<(), String> {
         let clamped = speed_percent.clamp(25, 100);
         let val = (57.0 + ((clamped - 25) as f64 / 75.0) * (229.0 - 57.0)) as u8;
-
-        let script = format!(
-            r#"
-            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($set) {{
-                Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetQuietMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetAutoFanStatus -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetFixedFanStatus -Arguments @{{ Data = [byte]1 }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetStepFanStatus -Arguments @{{ Data = [byte]1 }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetFixedFanSpeed -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
-                Invoke-CimMethod -InputObject $set -MethodName SetGpuFanDuty -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
-            }}
-            "#,
-            val, val
-        );
-
-        run_powershell_silent(&script);
+        apply_pwm_speed(val);
         Ok(())
     }
 
@@ -295,8 +387,6 @@ impl LightingController for WindowsLightingController {
     fn set_zone_lighting(&mut self, zone: RgbZone, color: RgbColor, brightness: u8) -> Result<(), String> {
         let color_code = color.to_u8();
 
-        // Hardware firmware accepts brightness in range 0..50 (50 = 100% max hardware brightness)
-        // Values > 50 cause the firmware to reject the packet and shut off the LEDs!
         let hw_brightness = if brightness == 0 || color == RgbColor::Off {
             0
         } else {
@@ -357,11 +447,11 @@ fn make_static_packet(cmd: u8, brightness: u8, color_idx: u8) -> [u8; 70] {
     pkt[0] = 0x00;
     pkt[1] = cmd;
     pkt[2] = 0x00;
-    pkt[3] = 0x01; // Pure Solid Static
-    pkt[4] = 0x01; // Speed 1
-    pkt[5] = brightness; // 0..50
+    pkt[3] = 0x01;
+    pkt[4] = 0x01;
+    pkt[5] = brightness;
     pkt[6] = color_idx;
-    pkt[7] = 0x01; // Direction 1
+    pkt[7] = 0x01;
     let sum: u32 = pkt[1..8].iter().map(|&x| x as u32).sum();
     pkt[8] = (0xFF - (sum & 0xFF)) as u8;
     pkt

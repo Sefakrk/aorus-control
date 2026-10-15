@@ -6,7 +6,7 @@ use crate::hal::models::{FanMode, GpuMode, RgbColor};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub fan_mode: FanMode,
-    pub manual_fan_speed: u8,
+    pub custom_curve: [u8; 5],
     pub kb_color: RgbColor,
     pub kb_brightness: u8,
     pub bar_color: RgbColor,
@@ -19,7 +19,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             fan_mode: FanMode::Normal,
-            manual_fan_speed: 60,
+            custom_curve: [25, 40, 55, 75, 95],
             kb_color: RgbColor::Blue,
             kb_brightness: 100,
             bar_color: RgbColor::Blue,

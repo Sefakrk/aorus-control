@@ -5,6 +5,7 @@ pub use models::*;
 
 pub trait ThermalController: Send + Sync {
     fn set_fan_mode(&mut self, mode: FanMode) -> Result<(), String>;
+    #[allow(dead_code)]
     fn set_custom_fan_speed(&mut self, speed_percent: u8) -> Result<(), String>;
     #[allow(dead_code)]
     fn get_telemetry(&self) -> Result<TelemetryData, String>;

@@ -12,6 +12,56 @@ use hal::create_controllers;
 
 slint::include_modules!();
 
+const PWM_TABLE: [(u8, u8); 16] = [
+    (25, 57),  (30, 68),  (35, 80),  (40, 91),
+    (45, 103), (50, 114), (55, 125), (60, 137),
+    (65, 148), (70, 160), (75, 171), (80, 183),
+    (85, 194), (90, 206), (95, 217), (100, 229),
+];
+
+fn interpolate_curve(temp: u8, curve: &[u8; 5]) -> u8 {
+    let t = temp as f32;
+    let p0 = curve[0] as f32;
+    let p1 = curve[1] as f32;
+    let p2 = curve[2] as f32;
+    let p3 = curve[3] as f32;
+    let p4 = curve[4] as f32;
+
+    let target_pct = if t <= 50.0 {
+        p0
+    } else if t <= 60.0 {
+        p0 + (t - 50.0) / 10.0 * (p1 - p0)
+    } else if t <= 70.0 {
+        p1 + (t - 60.0) / 10.0 * (p2 - p1)
+    } else if t <= 80.0 {
+        p2 + (t - 70.0) / 10.0 * (p3 - p2)
+    } else if t <= 90.0 {
+        p3 + (t - 80.0) / 10.0 * (p4 - p3)
+    } else {
+        p4
+    };
+
+    target_pct.round().clamp(0.0, 100.0) as u8
+}
+
+fn pct_to_nearest_pwm(pct: u8) -> u8 {
+    if pct < 20 {
+        return 0; // Silent stop
+    }
+    let mut closest_pwm = PWM_TABLE[0].1;
+    let mut min_diff = i16::MAX;
+
+    for &(step_pct, pwm) in &PWM_TABLE {
+        let diff = (step_pct as i16 - pct as i16).abs();
+        if diff < min_diff {
+            min_diff = diff;
+            closest_pwm = pwm;
+        }
+    }
+
+    closest_pwm
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     let main_window = AppWindow::new()?;
 
@@ -22,6 +72,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let (thermal_ctrl, lighting_ctrl) = create_controllers();
     let thermal_controller = Arc::new(Mutex::new(thermal_ctrl));
     let lighting_controller = Arc::new(Mutex::new(lighting_ctrl));
+    let last_applied_custom_target = Arc::new(Mutex::new(None::<u8>));
 
     // 3. Apply persisted configuration to hardware and UI immediately on startup
     {
@@ -31,11 +82,18 @@ fn main() -> Result<(), slint::PlatformError> {
             FanMode::Quiet => "Quiet",
             FanMode::Gaming => "Gaming",
             FanMode::Turbo => "Turbo",
-            FanMode::Manual(_) => "Manual",
+            FanMode::Custom => "Custom",
             _ => "Normal",
         };
         main_window.set_active_mode(mode_str.into());
-        main_window.set_fan_speed(cfg.manual_fan_speed as f32);
+
+        // Set 5-point curve values in UI
+        main_window.set_curve_50(cfg.custom_curve[0] as f32);
+        main_window.set_curve_60(cfg.custom_curve[1] as f32);
+        main_window.set_curve_70(cfg.custom_curve[2] as f32);
+        main_window.set_curve_80(cfg.custom_curve[3] as f32);
+        main_window.set_curve_90(cfg.custom_curve[4] as f32);
+
         main_window.set_kb_brightness(cfg.kb_brightness as f32);
         main_window.set_active_kb_color(cfg.kb_color.to_name().into());
         main_window.set_active_bar_color(cfg.bar_color.to_name().into());
@@ -47,7 +105,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let _ = tc.set_fan_mode(cfg.fan_mode);
         let _ = tc.set_battery_charge_limit(cfg.battery_limit);
 
-        // Constraint 8: Read REAL hardware MUX state on startup (not stale config)
+        // Read REAL hardware MUX state on startup
         if let Ok(real_gpu_mode) = tc.get_gpu_mode() {
             main_window.set_active_gpu_mode(real_gpu_mode.to_name().into());
             cfg.gpu_mode = real_gpu_mode;
@@ -81,7 +139,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 5. Keyboard Brightness Live Drag Callback (Fast lighting update, zero disk I/O)
+    // 5. Keyboard Brightness Live Drag Callback
     {
         let lc_clone = lighting_controller.clone();
         let cfg_clone = config.clone();
@@ -95,7 +153,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 6. Keyboard Brightness Save Callback (Saves to disk only on slider release)
+    // 6. Keyboard Brightness Save Callback
     {
         let cfg_clone = config.clone();
 
@@ -150,14 +208,18 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
+        let custom_target_clone = last_applied_custom_target.clone();
 
         main_window.on_set_fan_mode(move |mode_str| {
             let mode = match mode_str.as_str() {
                 "Quiet" => FanMode::Quiet,
                 "Gaming" => FanMode::Gaming,
                 "Turbo" => FanMode::Turbo,
+                "Custom" => FanMode::Custom,
                 _ => FanMode::Normal,
             };
+
+            *custom_target_clone.lock() = None;
 
             {
                 let mut cfg = cfg_clone.lock();
@@ -170,27 +232,31 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 10. Custom Fan Speed Callback
+    // 10. Custom Curve Point Change Callback
     {
-        let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
 
-        main_window.on_set_custom_fan(move |speed| {
-            let clamped = speed.clamp(25, 100) as u8;
-
-            {
+        main_window.on_set_curve_point(move |idx, val| {
+            if idx >= 0 && idx < 5 {
                 let mut cfg = cfg_clone.lock();
-                cfg.fan_mode = FanMode::Manual(clamped);
-                cfg.manual_fan_speed = clamped;
-                let _ = cfg.save();
+                cfg.custom_curve[idx as usize] = (val as u8).clamp(0, 100);
             }
-
-            let mut tc = tc_clone.lock();
-            let _ = tc.set_custom_fan_speed(clamped);
         });
     }
 
-    // 11. MUX Switch Callback
+    // 11. Save Custom Curve Callback (on slider release)
+    {
+        let cfg_clone = config.clone();
+        let custom_target_clone = last_applied_custom_target.clone();
+
+        main_window.on_save_curve(move || {
+            *custom_target_clone.lock() = None; // Reset hysteresis so new curve applies immediately
+            let cfg = cfg_clone.lock();
+            let _ = cfg.save();
+        });
+    }
+
+    // 12. MUX Switch Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -209,7 +275,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 12. Battery Limit Callback
+    // 13. Battery Limit Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -226,33 +292,61 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 13. Non-blocking Background Telemetry Thread
-    // Does NOT hold the thermal_controller Mutex lock during WMI execution
-    // Separately updates FAN 1 and FAN 2 RPM
-    // Sleep is at the END of the loop so initial telemetry appears instantly
+    // 14. Non-blocking Background Telemetry & Custom Fan Curve Loop
+    // Existing 2-second loop extended without spawning new threads
     {
         let window_weak = main_window.as_weak();
+        let cfg_clone = config.clone();
+        let custom_target_clone = last_applied_custom_target.clone();
 
         std::thread::spawn(move || {
             loop {
-                // Fetch directly without locking the ThermalController mutex
                 if let Ok(telemetry) = hal::windows::fetch_telemetry() {
                     let weak = window_weak.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(window) = weak.upgrade() {
                             window.set_cpu_temp(format!("{} \u{00B0}C", telemetry.cpu_temp).into());
+                            window.set_cpu_usage(format!("{}%", telemetry.cpu_usage).into());
                             window.set_gpu_temp(format!("{} \u{00B0}C", telemetry.gpu_temp).into());
+                            window.set_gpu_usage(format!("{}%", telemetry.gpu_usage).into());
                             window.set_fan1_rpm(format!("{} RPM", telemetry.fan1_rpm).into());
                             window.set_fan2_rpm(format!("{} RPM", telemetry.fan2_rpm).into());
                         }
                     });
+
+                    // Custom Fan Curve Engine with Hysteresis
+                    let (mode, curve) = {
+                        let cfg = cfg_clone.lock();
+                        (cfg.fan_mode, cfg.custom_curve)
+                    };
+
+                    if mode == FanMode::Custom {
+                        let max_temp = telemetry.cpu_temp.max(telemetry.gpu_temp);
+                        let target_pct = interpolate_curve(max_temp, &curve);
+                        let mut target_lock = custom_target_clone.lock();
+
+                        let should_apply = match *target_lock {
+                            None => true,
+                            Some(last) => (target_pct as i16 - last as i16).abs() >= 5,
+                        };
+
+                        if should_apply {
+                            *target_lock = Some(target_pct);
+                            let pwm = pct_to_nearest_pwm(target_pct);
+                            hal::windows::apply_pwm_speed(pwm);
+                        }
+                    }
                 }
 
-                // Sleep at the end of the loop
                 std::thread::sleep(Duration::from_millis(2000));
             }
         });
     }
 
-    main_window.run()
+    let run_res = main_window.run();
+
+    // Restore automatic fan control on application exit
+    hal::windows::restore_auto_fans();
+
+    run_res
 }

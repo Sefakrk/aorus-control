@@ -33,19 +33,19 @@ component ModeButton inherits TouchArea {
         border-color: root.is_active ? #00ffa3 : #2b3040;
 
         HorizontalLayout {
-            padding-left: 10px;
-            padding-right: 10px;
-            spacing: 6px;
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 5px;
             alignment: center;
 
             Text {
                 text: root.icon;
-                font-size: 15px;
+                font-size: 14px;
                 vertical-alignment: center;
             }
             Text {
                 text: root.title;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 700;
                 color: root.is_active ? #00ffa3 : #d1d5db;
                 vertical-alignment: center;
@@ -61,8 +61,8 @@ component CustomSlider inherits Rectangle {
     callback changed(float);
     callback released(float);
 
-    height: 28px;
-    min-width: 200px;
+    height: 26px;
+    min-width: 180px;
     horizontal-stretch: 1;
 
     property <float> ratio: Math.clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0.0, 1.0);
@@ -125,16 +125,22 @@ component CustomSlider inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "AORUS 16X Control";
-    width: 720px;
-    height: 860px;
+    width: 740px;
+    height: 940px;
     background: #0d0f14;
     default-font-family: "Segoe UI";
 
     in-out property <string> cpu_temp: "-- °C";
+    in-out property <string> cpu_usage: "0%";
     in-out property <string> gpu_temp: "-- °C";
+    in-out property <string> gpu_usage: "0%";
     in-out property <string> fan1_rpm: "-- RPM";
     in-out property <string> fan2_rpm: "-- RPM";
-    in-out property <float> fan_speed: 60;
+    in-out property <float> curve_50: 25;
+    in-out property <float> curve_60: 40;
+    in-out property <float> curve_70: 55;
+    in-out property <float> curve_80: 75;
+    in-out property <float> curve_90: 95;
     in-out property <float> kb_brightness: 100;
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_gpu_mode: "Hybrid";
@@ -144,7 +150,8 @@ export component AppWindow inherits Window {
     in-out property <bool> battery_limit: true;
 
     callback set_fan_mode(string);
-    callback set_custom_fan(int);
+    callback set_curve_point(int, int);
+    callback save_curve();
     callback set_gpu_mode(string);
     callback set_keyboard_color(string);
     callback set_keyboard_brightness(float);
@@ -154,10 +161,10 @@ export component AppWindow inherits Window {
     callback toggle_battery_limit(bool);
 
     VerticalLayout {
-        padding: 22px;
-        spacing: 14px;
+        padding: 20px;
+        spacing: 12px;
 
-        // Header with live sensors (CPU, GPU, FAN 1, FAN 2)
+        // Header with live sensors (CPU % / GPU % / FAN 1 / FAN 2)
         HorizontalLayout {
             alignment: space-between;
 
@@ -181,7 +188,7 @@ export component AppWindow inherits Window {
                 spacing: 6px;
 
                 Rectangle {
-                    height: 36px;
+                    height: 38px;
                     background: #161922;
                     border-radius: 8px;
                     border-width: 1px;
@@ -189,14 +196,15 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 8px;
-                        spacing: 5px;
+                        spacing: 4px;
                         Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                         Text { text: root.cpu_temp; font-size: 12px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
+                        Text { text: "(" + root.cpu_usage + ")"; font-size: 10px; color: #6ee7b7; vertical-alignment: center; }
                     }
                 }
 
                 Rectangle {
-                    height: 36px;
+                    height: 38px;
                     background: #161922;
                     border-radius: 8px;
                     border-width: 1px;
@@ -204,14 +212,15 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 8px;
-                        spacing: 5px;
+                        spacing: 4px;
                         Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                         Text { text: root.gpu_temp; font-size: 12px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
+                        Text { text: "(" + root.gpu_usage + ")"; font-size: 10px; color: #7dd3fc; vertical-alignment: center; }
                     }
                 }
 
                 Rectangle {
-                    height: 36px;
+                    height: 38px;
                     background: #161922;
                     border-radius: 8px;
                     border-width: 1px;
@@ -219,14 +228,14 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 8px;
-                        spacing: 5px;
+                        spacing: 4px;
                         Text { text: "FAN 1"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                         Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
                     }
                 }
 
                 Rectangle {
-                    height: 36px;
+                    height: 38px;
                     background: #161922;
                     border-radius: 8px;
                     border-width: 1px;
@@ -234,7 +243,7 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 8px;
-                        spacing: 5px;
+                        spacing: 4px;
                         Text { text: "FAN 2"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                         Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
                     }
@@ -250,8 +259,8 @@ export component AppWindow inherits Window {
             border-color: #212635;
 
             VerticalLayout {
-                padding: 14px;
-                spacing: 12px;
+                padding: 12px;
+                spacing: 10px;
 
                 Text {
                     text: "FAN & POWER MODES";
@@ -300,49 +309,20 @@ export component AppWindow inherits Window {
                             root.set_fan_mode("Turbo");
                         }
                     }
-                }
-
-                // Custom fan speed slider
-                HorizontalLayout {
-                    spacing: 12px;
-                    Text {
-                        text: "Manual Fan:";
-                        font-size: 12px;
-                        color: #9ca3af;
-                        vertical-alignment: center;
-                        width: 80px;
-                    }
-                    CustomSlider {
-                        minimum: 0;
-                        maximum: 100;
-                        value: root.fan_speed;
-                        changed(v) => {
-                            root.fan_speed = v;
-                        }
-                        released(v) => {
-                            root.fan_speed = v;
-                        }
-                    }
-                    Text {
-                        text: "\{Math.round(root.fan_speed)}%";
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: #ffffff;
-                        vertical-alignment: center;
-                        width: 42px;
-                    }
-                    Button {
-                        text: "Apply";
+                    ModeButton {
+                        title: "Custom";
+                        icon: "🛠️";
+                        is_active: root.active_mode == "Custom";
                         clicked => {
-                            root.active_mode = "Manual";
-                            root.set_custom_fan(Math.round(root.fan_speed));
+                            root.active_mode = "Custom";
+                            root.set_fan_mode("Custom");
                         }
                     }
                 }
             }
         }
 
-        // Section 2: MUX Switch
+        // Section 2: Custom Fan Curve Step Matrix
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -350,8 +330,100 @@ export component AppWindow inherits Window {
             border-color: #212635;
 
             VerticalLayout {
-                padding: 14px;
-                spacing: 10px;
+                padding: 12px;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "📊  ÖZEL FAN EĞRİSİ (SICAKLIK BASAMAKLARI)";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #f59e0b;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: root.active_mode == "Custom" ? "AKTİF KULLANILIYOR" : "Custom modunda devreye girer";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: root.active_mode == "Custom" ? #00ffa3 : #6b7280;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Row 1: 50°C
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: "50 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                    CustomSlider {
+                        value: root.curve_50;
+                        changed(v) => { root.curve_50 = v; root.set_curve_point(0, Math.round(v)); }
+                        released(v) => { root.save_curve(); }
+                    }
+                    Text { text: "\{Math.round(root.curve_50)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                }
+
+                // Row 2: 60°C
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: "60 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                    CustomSlider {
+                        value: root.curve_60;
+                        changed(v) => { root.curve_60 = v; root.set_curve_point(1, Math.round(v)); }
+                        released(v) => { root.save_curve(); }
+                    }
+                    Text { text: "\{Math.round(root.curve_60)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                }
+
+                // Row 3: 70°C
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: "70 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                    CustomSlider {
+                        value: root.curve_70;
+                        changed(v) => { root.curve_70 = v; root.set_curve_point(2, Math.round(v)); }
+                        released(v) => { root.save_curve(); }
+                    }
+                    Text { text: "\{Math.round(root.curve_70)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                }
+
+                // Row 4: 80°C
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: "80 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                    CustomSlider {
+                        value: root.curve_80;
+                        changed(v) => { root.curve_80 = v; root.set_curve_point(3, Math.round(v)); }
+                        released(v) => { root.save_curve(); }
+                    }
+                    Text { text: "\{Math.round(root.curve_80)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                }
+
+                // Row 5: 90°C
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: "90 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                    CustomSlider {
+                        value: root.curve_90;
+                        changed(v) => { root.curve_90 = v; root.set_curve_point(4, Math.round(v)); }
+                        released(v) => { root.save_curve(); }
+                    }
+                    Text { text: "\{Math.round(root.curve_90)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // Section 3: MUX Switch
+        Rectangle {
+            background: #141720;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #212635;
+
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
 
                 HorizontalLayout {
                     alignment: space-between;
@@ -373,7 +445,7 @@ export component AppWindow inherits Window {
                 }
 
                 HorizontalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
 
                     ModeButton {
                         title: "Hybrid (Optimus)";
@@ -398,13 +470,13 @@ export component AppWindow inherits Window {
 
                 Text {
                     text: "⚠️ MUX modu değişikliği donanım seviyesindedir. Etkili olması için sistemi yeniden başlatmanız gerekir.";
-                    font-size: 11px;
+                    font-size: 10px;
                     color: #f59e0b;
                 }
             }
         }
 
-        // Section 3: Keyboard Static RGB
+        // Section 4: Keyboard Static RGB
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -412,8 +484,8 @@ export component AppWindow inherits Window {
             border-color: #212635;
 
             VerticalLayout {
-                padding: 14px;
-                spacing: 12px;
+                padding: 12px;
+                spacing: 10px;
 
                 HorizontalLayout {
                     alignment: space-between;
@@ -487,7 +559,7 @@ export component AppWindow inherits Window {
                         font-size: 12px;
                         color: #9ca3af;
                         vertical-alignment: center;
-                        width: 80px;
+                        width: 75px;
                     }
                     CustomSlider {
                         minimum: 0;
@@ -503,17 +575,17 @@ export component AppWindow inherits Window {
                     }
                     Text {
                         text: "\{Math.round(root.kb_brightness)}%";
-                        font-size: 13px;
+                        font-size: 12px;
                         font-weight: 700;
                         color: #ffffff;
                         vertical-alignment: center;
-                        width: 42px;
+                        width: 38px;
                     }
                 }
             }
         }
 
-        // Section 4: Rear LightBar (Beacon)
+        // Section 5: Rear LightBar (Beacon)
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -521,8 +593,8 @@ export component AppWindow inherits Window {
             border-color: #212635;
 
             VerticalLayout {
-                padding: 14px;
-                spacing: 12px;
+                padding: 12px;
+                spacing: 10px;
 
                 HorizontalLayout {
                     alignment: space-between;
@@ -595,7 +667,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Section 5: Battery Health Care
+        // Section 6: Battery Health Care
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -603,7 +675,7 @@ export component AppWindow inherits Window {
             border-color: #212635;
 
             HorizontalLayout {
-                padding: 14px;
+                padding: 12px;
                 alignment: space-between;
 
                 VerticalLayout {
@@ -617,7 +689,7 @@ export component AppWindow inherits Window {
                     }
                     Text {
                         text: "Limit maximum charge to 80% to extend battery lifespan";
-                        font-size: 12px;
+                        font-size: 11px;
                         color: #6b7280;
                     }
                 }
