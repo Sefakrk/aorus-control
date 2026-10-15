@@ -105,10 +105,38 @@ fn fetch_gpu_usage() -> u8 {
 // 1. THERMAL CONTROLLER (WMI ACPI)
 // ==========================================
 
+const ACPI_BMOF: &[u8] = include_bytes!("../../../assets/acpi.bmof");
+
+pub fn ensure_wmi_mof_registered() {
+    let check_script = r#"
+        $cls = Get-CimClass -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue
+        if ($cls) { Write-Output "OK" } else { Write-Output "MISSING" }
+    "#;
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", check_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if text != "OK" {
+            let temp_path = std::env::temp_dir().join("aorus_acpi.bmof");
+            if std::fs::write(&temp_path, ACPI_BMOF).is_ok() {
+                let _ = Command::new("mofcomp.exe")
+                    .args(["-N:root\\wmi", temp_path.to_str().unwrap_or("")])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+                let _ = std::fs::remove_file(temp_path);
+            }
+        }
+    }
+}
+
 pub struct WindowsThermalController;
 
 impl WindowsThermalController {
     pub fn new() -> Self {
+        ensure_wmi_mof_registered();
         Self
     }
 }
