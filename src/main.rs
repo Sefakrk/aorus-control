@@ -454,7 +454,6 @@ fn main() -> Result<(), slint::PlatformError> {
         show_id = show_item.id().clone();
         quit_id = quit_item.id().clone();
 
-        // In-memory RGBA icon loaded from compile-time embedded bytes
         let icon_result = tray_icon::Icon::from_rgba(ICON_RGBA.to_vec(), 256, 256);
 
         _tray_icon = icon_result.ok().and_then(|ico| {
@@ -470,7 +469,8 @@ fn main() -> Result<(), slint::PlatformError> {
     let has_tray = _tray_icon.is_some();
 
     // Window Close Intercept:
-    // SAFETY RULE: If tray icon failed to initialize, NEVER hide window! Close normally to avoid phantom zombie process.
+    // When close_to_tray is true and tray exists, hide window and keep running event loop!
+    // When close_to_tray is false, restore auto fans and quit cleanly.
     {
         let cfg_clone = config.clone();
         let window_weak = main_window.as_weak();
@@ -484,6 +484,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 slint::CloseRequestResponse::KeepWindowShown
             } else {
                 hal::windows::restore_auto_fans();
+                let _ = slint::quit_event_loop();
                 slint::CloseRequestResponse::HideWindow
             }
         });
@@ -510,6 +511,7 @@ fn main() -> Result<(), slint::PlatformError> {
                         });
                     } else if event.id == quit_id {
                         hal::windows::restore_auto_fans();
+                        let _ = slint::quit_event_loop();
                         std::process::exit(0);
                     }
                 }
@@ -577,7 +579,9 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    let run_res = main_window.run();
+    // Show window and keep the event loop alive until explicitly told to quit!
+    main_window.show()?;
+    let run_res = slint::run_event_loop_until_quit();
 
     // Restore automatic fan control on application exit
     hal::windows::restore_auto_fans();
