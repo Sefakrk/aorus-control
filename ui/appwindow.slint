@@ -3,8 +3,8 @@ import { Button, Switch } from "std-widgets.slint";
 component ColorChip inherits TouchArea {
     in property <color> chip_color;
     in property <bool> is_selected: false;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     mouse-cursor: pointer;
 
     Rectangle {
@@ -57,7 +57,7 @@ component MuxButton inherits TouchArea {
     in property <string> subtitle;
     in property <string> icon;
     in property <bool> is_active: false;
-    height: 64px;
+    height: 60px;
     mouse-cursor: pointer;
 
     Rectangle {
@@ -203,7 +203,7 @@ export component AppWindow inherits Window {
     title: "AORUS 16X Control";
     icon: @image-url("../assets/icon.png");
     width: 740px;
-    height: 550px;
+    height: 560px;
     background: #0d0f14;
     default-font-family: "Segoe UI";
 
@@ -220,6 +220,9 @@ export component AppWindow inherits Window {
     in-out property <float> curve_80: 75;
     in-out property <float> curve_90: 95;
     in-out property <float> kb_brightness: 100;
+    in-out property <int> display_hz: 165;
+    in-out property <bool> close_to_tray: true;
+    in-out property <string> battery_hardware_text: "Donanım Limiti: %100";
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_gpu_mode: "Hybrid";
     in-out property <bool> dgpu_killed: false;
@@ -234,6 +237,8 @@ export component AppWindow inherits Window {
     callback save_curve();
     callback set_gpu_mode(string);
     callback toggle_dgpu_kill();
+    callback set_display_hz(int);
+    callback toggle_close_to_tray(bool);
     callback set_keyboard_color(string);
     callback set_keyboard_brightness(float);
     callback save_keyboard_brightness(float);
@@ -384,7 +389,7 @@ export component AppWindow inherits Window {
                     }
                     NavTab {
                         title: "🎮 GPU / MUX";
-                        subtitle: "hybrid · dgpu · kill";
+                        subtitle: "hybrid · dgpu · hz";
                         is_active: root.active_tab == 1;
                         clicked => { root.active_tab = 1; }
                     }
@@ -396,7 +401,7 @@ export component AppWindow inherits Window {
                     }
                     NavTab {
                         title: "🔋 Pil";
-                        subtitle: "%80 limit";
+                        subtitle: "%80 + tray";
                         is_active: root.active_tab == 3;
                         clicked => { root.active_tab = 3; }
                     }
@@ -427,7 +432,10 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding-top: 10px; padding-bottom: 10px; padding-left: 12px; padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                padding-left: 12px;
+                                padding-right: 12px;
                                 spacing: 8px;
 
                                 Text {
@@ -497,7 +505,10 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding-top: 10px; padding-bottom: 10px; padding-left: 12px; padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                padding-left: 12px;
+                                padding-right: 12px;
                                 spacing: 6px;
 
                                 HorizontalLayout {
@@ -577,9 +588,9 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // TAB 1: GPU / MUX
+                    // TAB 1: GPU / MUX & EKRAN HIZI
                     if root.active_tab == 1 : VerticalLayout {
-                        spacing: 12px;
+                        spacing: 10px;
 
                         Rectangle {
                             background: #141720;
@@ -588,8 +599,8 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 14px;
-                                spacing: 12px;
+                                padding: 12px;
+                                spacing: 8px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
@@ -611,7 +622,7 @@ export component AppWindow inherits Window {
                                 }
 
                                 HorizontalLayout {
-                                    spacing: 10px;
+                                    spacing: 8px;
 
                                     MuxButton {
                                         title: "Hybrid (Optimus)";
@@ -648,14 +659,74 @@ export component AppWindow inherits Window {
                                     background: #161922;
                                     border-radius: 8px;
                                     HorizontalLayout {
-                                        padding: 10px;
+                                        padding: 8px;
                                         Text {
                                             text: root.dgpu_notice;
-                                            font-size: 11px;
+                                            font-size: 10px;
                                             color: #f59e0b;
                                             wrap: word-wrap;
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // Ekran Yenileme Hızı Kartı (Win32)
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 12px;
+                                spacing: 8px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    Text {
+                                        text: "🖥️  EKRAN YENİLEME HIZI (REFRESH RATE)";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #38bdf8;
+                                        letter-spacing: 1px;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: "Mevcut: " + root.display_hz + "Hz";
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: root.display_hz == 165 ? #00ffa3 : #f59e0b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    ModeButton {
+                                        title: "60Hz (Pil Tasarrufu)";
+                                        icon: "🔋";
+                                        is_active: root.display_hz == 60;
+                                        clicked => {
+                                            root.set_display_hz(60);
+                                        }
+                                    }
+
+                                    ModeButton {
+                                        title: "165Hz (Oyun / Akıcı)";
+                                        icon: "⚡";
+                                        is_active: root.display_hz == 165;
+                                        clicked => {
+                                            root.set_display_hz(165);
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    text: "ℹ️ Ekran hızı Windows API üzerinden anlık değiştirilir. Yeniden başlatma gerektirmez.";
+                                    font-size: 10px;
+                                    color: #6b7280;
                                 }
                             }
                         }
@@ -860,9 +931,9 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // TAB 3: PİL
+                    // TAB 3: PİL VE SİSTEM AYARLARI
                     if root.active_tab == 3 : VerticalLayout {
-                        spacing: 12px;
+                        spacing: 10px;
 
                         Rectangle {
                             background: #141720;
@@ -871,8 +942,8 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 16px;
-                                spacing: 14px;
+                                padding: 14px;
+                                spacing: 10px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
@@ -891,6 +962,12 @@ export component AppWindow inherits Window {
                                             font-size: 12px;
                                             color: #6b7280;
                                         }
+                                        Text {
+                                            text: root.battery_hardware_text;
+                                            font-size: 11px;
+                                            font-weight: 700;
+                                            color: root.battery_limit ? #00ffa3 : #9ca3af;
+                                        }
                                     }
 
                                     Switch {
@@ -898,6 +975,47 @@ export component AppWindow inherits Window {
                                         toggled => {
                                             root.battery_limit = self.checked;
                                             root.toggle_battery_limit(self.checked);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Kapatma Davranışı (System Tray) Kartı
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 14px;
+                                spacing: 10px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    VerticalLayout {
+                                        spacing: 3px;
+                                        Text {
+                                            text: "🗔  KAPATMA DAVRANIŞI (SYSTEM TRAY)";
+                                            font-size: 11px;
+                                            font-weight: 800;
+                                            color: #f59e0b;
+                                            letter-spacing: 1px;
+                                        }
+                                        Text {
+                                            text: root.close_to_tray ? "Pencere kapatıldığında arka planda çalışmaya devam eder (Tray)." : "Pencere kapatıldığında uygulama tamamen kapanır.";
+                                            font-size: 12px;
+                                            color: #6b7280;
+                                        }
+                                    }
+
+                                    Switch {
+                                        checked: root.close_to_tray;
+                                        toggled => {
+                                            root.close_to_tray = self.checked;
+                                            root.toggle_close_to_tray(self.checked);
                                         }
                                     }
                                 }

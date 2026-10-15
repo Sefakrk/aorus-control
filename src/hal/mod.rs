@@ -10,10 +10,13 @@ pub trait ThermalController: Send + Sync {
     #[allow(dead_code)]
     fn get_telemetry(&self) -> Result<TelemetryData, String>;
     fn set_battery_charge_limit(&mut self, enabled: bool) -> Result<(), String>;
+    fn get_battery_charge_limit(&self) -> Result<u8, String>;
     fn get_gpu_mode(&self) -> Result<GpuMode, String>;
     fn set_gpu_mode(&mut self, mode: GpuMode) -> Result<(), String>;
     fn get_dgpu_status(&self) -> Result<bool, String>;
     fn set_dgpu_enabled(&mut self, enabled: bool) -> Result<(), String>;
+    fn get_display_hz(&self) -> u32;
+    fn set_display_hz(&mut self, hz: u32) -> Result<(), String>;
 }
 
 pub trait LightingController: Send + Sync {

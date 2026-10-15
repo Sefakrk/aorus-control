@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub battery_limit: bool,
     pub gpu_mode: GpuMode,
     pub dgpu_killed: bool,
+    pub close_to_tray: bool,
+    pub display_hz: u32,
 }
 
 impl Default for AppConfig {
@@ -29,6 +31,8 @@ impl Default for AppConfig {
             battery_limit: true,
             gpu_mode: GpuMode::Hybrid,
             dgpu_killed: false,
+            close_to_tray: true,
+            display_hz: 165,
         }
     }
 }

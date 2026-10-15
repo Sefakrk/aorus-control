@@ -9,6 +9,8 @@ use parking_lot::Mutex;
 use config::AppConfig;
 use hal::models::*;
 use hal::create_controllers;
+use tray_icon::menu::{Menu, MenuItem, MenuEvent};
+use tray_icon::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 
 slint::include_modules!();
 
@@ -99,17 +101,40 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.set_active_bar_color(cfg.bar_color.to_name().into());
         main_window.set_lightbar_enabled(cfg.bar_enabled);
         main_window.set_battery_limit(cfg.battery_limit);
+        main_window.set_close_to_tray(cfg.close_to_tray);
 
         // Apply fan and lighting to hardware via HAL
         let mut tc = thermal_controller.lock();
         let _ = tc.set_fan_mode(cfg.fan_mode);
-        let _ = tc.set_battery_charge_limit(cfg.battery_limit);
+
+        // Read REAL hardware battery charge limit via GetMaxCharge
+        if let Ok(limit) = tc.get_battery_charge_limit() {
+            let is_limited = limit == 80;
+            main_window.set_battery_limit(is_limited);
+            cfg.battery_limit = is_limited;
+            if is_limited {
+                main_window.set_battery_hardware_text("Donanım Limiti: %80 (Pil Koruma Aktif)".into());
+            } else {
+                main_window.set_battery_hardware_text(format!("Donanım Limiti: %{} (Standart Şarj)", limit).into());
+            }
+        } else {
+            main_window.set_battery_limit(cfg.battery_limit);
+            if cfg.battery_limit {
+                main_window.set_battery_hardware_text("Donanım Limiti: %80".into());
+            } else {
+                main_window.set_battery_hardware_text("Donanım Limiti: %100".into());
+            }
+        }
+
+        // Read REAL display refresh rate via Win32 EnumDisplaySettings
+        let current_hz = tc.get_display_hz();
+        main_window.set_display_hz(current_hz as i32);
+        cfg.display_hz = current_hz;
 
         // Read REAL hardware MUX state on startup
         if let Ok(real_gpu_mode) = tc.get_gpu_mode() {
             main_window.set_active_gpu_mode(real_gpu_mode.to_name().into());
             cfg.gpu_mode = real_gpu_mode;
-            let _ = cfg.save();
         } else {
             main_window.set_active_gpu_mode(cfg.gpu_mode.to_name().into());
         }
@@ -119,10 +144,11 @@ fn main() -> Result<(), slint::PlatformError> {
             let is_killed = !is_active;
             main_window.set_dgpu_killed(is_killed);
             cfg.dgpu_killed = is_killed;
-            let _ = cfg.save();
         } else {
             main_window.set_dgpu_killed(cfg.dgpu_killed);
         }
+
+        let _ = cfg.save();
 
         let mut lc = lighting_controller.lock();
         let _ = lc.set_zone_lighting(RgbZone::Keyboard, cfg.kb_color, cfg.kb_brightness);
@@ -266,7 +292,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 12. MUX Switch Callback (Fixed regression: updates active_gpu_mode immediately)
+    // 12. MUX Switch Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -275,7 +301,6 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.on_set_gpu_mode(move |mode_str| {
             let mode = GpuMode::from_name(mode_str.as_str());
 
-            // If switching to Discrete while dGPU was killed, auto-enable dGPU first
             if mode == GpuMode::Discrete {
                 let mut tc = tc_clone.lock();
                 let _ = tc.set_dgpu_enabled(true);
@@ -295,7 +320,6 @@ fn main() -> Result<(), slint::PlatformError> {
                 let _ = tc.set_gpu_mode(mode);
             }
 
-            // Update UI property so button highlight updates immediately!
             if let Some(w) = window_weak.upgrade() {
                 w.set_active_gpu_mode(mode.to_name().into());
                 w.set_dgpu_notice("⚠️ MUX modu değiştirildi. Donanım seviyesinde etkili olması için sistemi yeniden başlatın.".into());
@@ -310,7 +334,6 @@ fn main() -> Result<(), slint::PlatformError> {
         let window_weak = main_window.as_weak();
 
         main_window.on_toggle_dgpu_kill(move || {
-            // Check real physical hardware MUX mode
             let real_hw_mode = {
                 let tc = tc_clone.lock();
                 tc.get_gpu_mode().unwrap_or(GpuMode::Discrete)
@@ -321,9 +344,6 @@ fn main() -> Result<(), slint::PlatformError> {
                 (cfg.gpu_mode, cfg.dgpu_killed)
             };
 
-            // PENDING REBOOT / DISCRETE PROTECTION:
-            // If physical hardware is Discrete, OR config is Discrete:
-            // Siyah ekran riski var! Kapatılamaz!
             if real_hw_mode == GpuMode::Discrete || cfg_mode == GpuMode::Discrete {
                 if let Some(w) = window_weak.upgrade() {
                     w.set_active_gpu_mode("Hybrid".into());
@@ -338,7 +358,6 @@ fn main() -> Result<(), slint::PlatformError> {
                 return;
             }
 
-            // In confirmed pure Hybrid mode: toggle dGPU state safely
             let mut tc = tc_clone.lock();
             if is_killed {
                 let _ = tc.set_dgpu_enabled(true);
@@ -362,10 +381,31 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 14. Battery Limit Callback
+    // 14. Display Refresh Rate Callback (Direct Win32 EnumDisplaySettings / ChangeDisplaySettingsEx)
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
+        let window_weak = main_window.as_weak();
+
+        main_window.on_set_display_hz(move |hz| {
+            let target = hz as u32;
+            let mut tc = tc_clone.lock();
+            if tc.set_display_hz(target).is_ok() {
+                if let Some(w) = window_weak.upgrade() {
+                    w.set_display_hz(target as i32);
+                }
+                let mut cfg = cfg_clone.lock();
+                cfg.display_hz = target;
+                let _ = cfg.save();
+            }
+        });
+    }
+
+    // 15. Battery Limit Callback (with GetMaxCharge hardware verification)
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
+        let window_weak = main_window.as_weak();
 
         main_window.on_toggle_battery_limit(move |enabled| {
             {
@@ -376,55 +416,163 @@ fn main() -> Result<(), slint::PlatformError> {
 
             let mut tc = tc_clone.lock();
             let _ = tc.set_battery_charge_limit(enabled);
+
+            if let Some(w) = window_weak.upgrade() {
+                if enabled {
+                    w.set_battery_hardware_text("Donanım Limiti: %80 (Pil Koruma Aktif)".into());
+                } else {
+                    w.set_battery_hardware_text("Donanım Limiti: %100 (Standart Şarj)".into());
+                }
+            }
         });
     }
 
-    // 15. Non-blocking Background Telemetry & Custom Fan Curve Loop
+    // 16. Toggle Close To Tray Setting Callback
+    {
+        let cfg_clone = config.clone();
+
+        main_window.on_toggle_close_to_tray(move |enabled| {
+            let mut cfg = cfg_clone.lock();
+            cfg.close_to_tray = enabled;
+            let _ = cfg.save();
+        });
+    }
+
+    // 17. System Tray Setup & Window Close Handler
+    let show_id;
+    let quit_id;
+    let _tray_icon;
+
+    {
+        let icon_path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|dir| dir.join("assets/icon.ico")))
+            .unwrap_or_else(|| "assets/icon.ico".into());
+
+        let tray_menu = Menu::new();
+        let show_item = MenuItem::new("Göster", true, None);
+        let quit_item = MenuItem::new("Çıkış", true, None);
+        let _ = tray_menu.append_items(&[&show_item, &quit_item]);
+
+        show_id = show_item.id().clone();
+        quit_id = quit_item.id().clone();
+
+        let icon_result = tray_icon::Icon::from_path(&icon_path, None)
+            .or_else(|_| tray_icon::Icon::from_path("assets/icon.ico", None));
+
+        _tray_icon = icon_result.ok().and_then(|ico| {
+            TrayIconBuilder::new()
+                .with_menu(Box::new(tray_menu))
+                .with_tooltip("AORUS 16X Control")
+                .with_icon(ico)
+                .build()
+                .ok()
+        });
+    }
+
+    // Window Close Intercept: Minimize to tray if enabled, or quit
+    {
+        let cfg_clone = config.clone();
+        let window_weak = main_window.as_weak();
+
+        main_window.window().on_close_requested(move || {
+            let close_to_tray = cfg_clone.lock().close_to_tray;
+            if close_to_tray {
+                if let Some(w) = window_weak.upgrade() {
+                    let _ = w.hide();
+                }
+                slint::CloseRequestResponse::KeepWindowShown
+            } else {
+                hal::windows::restore_auto_fans();
+                slint::CloseRequestResponse::HideWindow
+            }
+        });
+    }
+
+    // 18. Non-blocking Background Telemetry, Tray Event Loop & Custom Fan Curve Loop
     {
         let window_weak = main_window.as_weak();
         let cfg_clone = config.clone();
         let custom_target_clone = last_applied_custom_target.clone();
 
         std::thread::spawn(move || {
+            let mut last_telemetry_tick = std::time::Instant::now();
+
             loop {
-                if let Ok(telemetry) = hal::windows::fetch_telemetry() {
-                    let weak = window_weak.clone();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(window) = weak.upgrade() {
-                            window.set_cpu_temp(format!("{} \u{00B0}C", telemetry.cpu_temp).into());
-                            window.set_cpu_usage(format!("{}%", telemetry.cpu_usage).into());
-                            window.set_gpu_temp(format!("{} \u{00B0}C", telemetry.gpu_temp).into());
-                            window.set_gpu_usage(format!("{}%", telemetry.gpu_usage).into());
-                            window.set_fan1_rpm(format!("{} RPM", telemetry.fan1_rpm).into());
-                            window.set_fan2_rpm(format!("{} RPM", telemetry.fan2_rpm).into());
+                // Handle Tray Menu Events
+                if let Ok(event) = MenuEvent::receiver().try_recv() {
+                    if event.id == show_id {
+                        let weak = window_weak.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(w) = weak.upgrade() {
+                                let _ = w.show();
+                            }
+                        });
+                    } else if event.id == quit_id {
+                        hal::windows::restore_auto_fans();
+                        std::process::exit(0);
+                    }
+                }
+
+                // Handle Tray Icon Click / Double-Click Events
+                if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+                    match event {
+                        TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. }
+                        | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. } => {
+                            let weak = window_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(w) = weak.upgrade() {
+                                    let _ = w.show();
+                                }
+                            });
                         }
-                    });
+                        _ => {}
+                    }
+                }
 
-                    // Custom Fan Curve Engine with Hysteresis
-                    let (mode, curve) = {
-                        let cfg = cfg_clone.lock();
-                        (cfg.fan_mode, cfg.custom_curve)
-                    };
+                // Telemetry tick every 2000ms
+                if last_telemetry_tick.elapsed() >= Duration::from_millis(2000) {
+                    last_telemetry_tick = std::time::Instant::now();
 
-                    if mode == FanMode::Custom {
-                        let max_temp = telemetry.cpu_temp.max(telemetry.gpu_temp);
-                        let target_pct = interpolate_curve(max_temp, &curve);
-                        let mut target_lock = custom_target_clone.lock();
+                    if let Ok(telemetry) = hal::windows::fetch_telemetry() {
+                        let weak = window_weak.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(window) = weak.upgrade() {
+                                window.set_cpu_temp(format!("{} \u{00B0}C", telemetry.cpu_temp).into());
+                                window.set_cpu_usage(format!("{}%", telemetry.cpu_usage).into());
+                                window.set_gpu_temp(format!("{} \u{00B0}C", telemetry.gpu_temp).into());
+                                window.set_gpu_usage(format!("{}%", telemetry.gpu_usage).into());
+                                window.set_fan1_rpm(format!("{} RPM", telemetry.fan1_rpm).into());
+                                window.set_fan2_rpm(format!("{} RPM", telemetry.fan2_rpm).into());
+                            }
+                        });
 
-                        let should_apply = match *target_lock {
-                            None => true,
-                            Some(last) => (target_pct as i16 - last as i16).abs() >= 5,
+                        // Custom Fan Curve Engine with Hysteresis
+                        let (mode, curve) = {
+                            let cfg = cfg_clone.lock();
+                            (cfg.fan_mode, cfg.custom_curve)
                         };
 
-                        if should_apply {
-                            *target_lock = Some(target_pct);
-                            let pwm = pct_to_nearest_pwm(target_pct);
-                            hal::windows::apply_pwm_speed(pwm);
+                        if mode == FanMode::Custom {
+                            let max_temp = telemetry.cpu_temp.max(telemetry.gpu_temp);
+                            let target_pct = interpolate_curve(max_temp, &curve);
+                            let mut target_lock = custom_target_clone.lock();
+
+                            let should_apply = match *target_lock {
+                                None => true,
+                                Some(last) => (target_pct as i16 - last as i16).abs() >= 5,
+                            };
+
+                            if should_apply {
+                                *target_lock = Some(target_pct);
+                                let pwm = pct_to_nearest_pwm(target_pct);
+                                hal::windows::apply_pwm_speed(pwm);
+                            }
                         }
                     }
                 }
 
-                std::thread::sleep(Duration::from_millis(2000));
+                std::thread::sleep(Duration::from_millis(100));
             }
         });
     }

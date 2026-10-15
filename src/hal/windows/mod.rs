@@ -6,6 +6,7 @@ use windows_sys::core::GUID;
 use windows_sys::Win32::Devices::DeviceAndDriverInstallation::*;
 use windows_sys::Win32::Devices::HumanInterfaceDevice::*;
 use windows_sys::Win32::Foundation::*;
+use windows_sys::Win32::Graphics::Gdi::*;
 
 use crate::hal::models::*;
 use crate::hal::{LightingController, ThermalController};
@@ -301,6 +302,31 @@ impl ThermalController for WindowsThermalController {
         Ok(())
     }
 
+    fn get_battery_charge_limit(&self) -> Result<u8, String> {
+        let script = r#"
+            $get = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($get) {
+                $res = (Invoke-CimMethod -InputObject $get -MethodName GetMaxCharge -ErrorAction SilentlyContinue).Data
+                if ($res -ne $null) {
+                    Write-Output "$res"
+                }
+            }
+        "#;
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Ok(val) = text.parse::<u8>() {
+            Ok(val)
+        } else {
+            Err("Failed to read GetMaxCharge from WMI".to_string())
+        }
+    }
+
     fn get_gpu_mode(&self) -> Result<GpuMode, String> {
         let script = r#"
             $get = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -391,6 +417,47 @@ impl ThermalController for WindowsThermalController {
 
         run_powershell_silent(script);
         Ok(())
+    }
+
+    fn get_display_hz(&self) -> u32 {
+        unsafe {
+            let mut dm: DEVMODEW = std::mem::zeroed();
+            dm.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+
+            if EnumDisplaySettingsW(std::ptr::null(), ENUM_CURRENT_SETTINGS, &mut dm) != 0 {
+                dm.dmDisplayFrequency
+            } else {
+                165
+            }
+        }
+    }
+
+    fn set_display_hz(&mut self, hz: u32) -> Result<(), String> {
+        unsafe {
+            let mut dm: DEVMODEW = std::mem::zeroed();
+            dm.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+
+            if EnumDisplaySettingsW(std::ptr::null(), ENUM_CURRENT_SETTINGS, &mut dm) == 0 {
+                return Err("Failed to query current display settings".to_string());
+            }
+
+            dm.dmFields = DM_DISPLAYFREQUENCY;
+            dm.dmDisplayFrequency = hz;
+
+            let res = ChangeDisplaySettingsExW(
+                std::ptr::null(),
+                &dm,
+                std::ptr::null_mut(),
+                CDS_UPDATEREGISTRY,
+                std::ptr::null(),
+            );
+
+            if res == DISP_CHANGE_SUCCESSFUL {
+                Ok(())
+            } else {
+                Err(format!("ChangeDisplaySettingsExW failed with code {}", res))
+            }
+        }
     }
 }
 
