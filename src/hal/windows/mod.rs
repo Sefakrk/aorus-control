@@ -113,7 +113,6 @@ impl ThermalController for WindowsThermalController {
 
     fn set_custom_fan_speed(&mut self, speed_percent: u8) -> Result<(), String> {
         let clamped = speed_percent.clamp(25, 100);
-        // Map 25..100% to PWM duty (57 to 229)
         let val = (57.0 + ((clamped - 25) as f64 / 75.0) * (229.0 - 57.0)) as u8;
 
         let script = format!(
@@ -212,52 +211,84 @@ impl ThermalController for WindowsThermalController {
 // 2. LIGHTING CONTROLLER (USB HID)
 // ==========================================
 
-pub struct WindowsLightingController;
+pub struct WindowsLightingController {
+    kb_paths: Vec<String>,
+    bar_paths: Vec<String>,
+    last_kb_color: Option<RgbColor>,
+    last_kb_brightness: Option<u8>,
+    last_bar_color: Option<RgbColor>,
+    last_bar_brightness: Option<u8>,
+}
 
 impl WindowsLightingController {
     pub fn new() -> Self {
-        Self
+        // Enumerate HID devices ONCE on startup and cache paths
+        let all_paths = unsafe { get_hid_device_paths() };
+        let mut kb_paths = Vec::new();
+        let mut bar_paths = Vec::new();
+
+        for path in all_paths {
+            let path_lower = path.to_lowercase();
+            if path_lower.contains("vid_0414") && path_lower.contains("pid_8005") {
+                kb_paths.push(path);
+            } else if path_lower.contains("vid_0414") && path_lower.contains("pid_8012") {
+                bar_paths.push(path);
+            }
+        }
+
+        Self {
+            kb_paths,
+            bar_paths,
+            last_kb_color: None,
+            last_kb_brightness: None,
+            last_bar_color: None,
+            last_bar_brightness: None,
+        }
     }
 }
 
 impl LightingController for WindowsLightingController {
     fn set_zone_lighting(&mut self, zone: RgbZone, color: RgbColor, brightness: u8) -> Result<(), String> {
-        let all_paths = unsafe { get_hid_device_paths() };
         let color_code = color.to_u8();
 
         match zone {
             RgbZone::Keyboard => {
-                for path in all_paths {
-                    let path_lower = path.to_lowercase();
-                    // Keyboard: PID 8005
-                    if path_lower.contains("vid_0414") && path_lower.contains("pid_8005") {
-                        if color == RgbColor::Off || brightness == 0 {
-                            let off_pkt = make_static_packet(0x08, 0, 0);
-                            send_raw_packet(&path, &off_pkt);
-                        } else {
-                            let pkt = make_static_packet(0x08, brightness, color_code);
-                            send_raw_packet(&path, &pkt);
-                        }
+                // Deduplicate redundant packet writes
+                if self.last_kb_color == Some(color) && self.last_kb_brightness == Some(brightness) {
+                    return Ok(());
+                }
+                self.last_kb_color = Some(color);
+                self.last_kb_brightness = Some(brightness);
+
+                for path in &self.kb_paths {
+                    if color == RgbColor::Off || brightness == 0 {
+                        let off_pkt = make_static_packet(0x08, 0, 0);
+                        send_raw_packet(path, &off_pkt);
+                    } else {
+                        let pkt = make_static_packet(0x08, brightness, color_code);
+                        send_raw_packet(path, &pkt);
                     }
                 }
             }
             RgbZone::RearBar => {
-                for path in all_paths {
-                    let path_lower = path.to_lowercase();
-                    // Rear Lightbar (Bar, Strip, Logo): PID 8012
-                    if path_lower.contains("vid_0414") && path_lower.contains("pid_8012") {
-                        if color == RgbColor::Off || brightness == 0 {
-                            let off_pkt1 = make_static_packet(0x08, 0, 0);
-                            let off_pkt2 = make_static_packet(0x0B, 0, 0);
-                            send_raw_packet(&path, &off_pkt1);
-                            send_raw_packet(&path, &off_pkt2);
-                        } else {
-                            // Send both 0x08 and 0x0B to cover Bar, Strip, and Beacon Logo simultaneously
-                            let pkt1 = make_static_packet(0x08, brightness, color_code);
-                            let pkt2 = make_static_packet(0x0B, 0x64, color_code);
-                            send_raw_packet(&path, &pkt1);
-                            send_raw_packet(&path, &pkt2);
-                        }
+                // Deduplicate redundant packet writes
+                if self.last_bar_color == Some(color) && self.last_bar_brightness == Some(brightness) {
+                    return Ok(());
+                }
+                self.last_bar_color = Some(color);
+                self.last_bar_brightness = Some(brightness);
+
+                for path in &self.bar_paths {
+                    if color == RgbColor::Off || brightness == 0 {
+                        let off_pkt1 = make_static_packet(0x08, 0, 0);
+                        let off_pkt2 = make_static_packet(0x0B, 0, 0);
+                        send_raw_packet(path, &off_pkt1);
+                        send_raw_packet(path, &off_pkt2);
+                    } else {
+                        let pkt1 = make_static_packet(0x08, brightness, color_code);
+                        let pkt2 = make_static_packet(0x0B, 0x64, color_code);
+                        send_raw_packet(path, &pkt1);
+                        send_raw_packet(path, &pkt2);
                     }
                 }
             }
@@ -273,10 +304,10 @@ impl LightingController for WindowsLightingController {
 
 fn make_static_packet(cmd: u8, brightness: u8, color_idx: u8) -> [u8; 70] {
     let mut pkt = [0u8; 70];
-    pkt[0] = 0x00; // Report ID
-    pkt[1] = cmd;  // 0x08 or 0x0B
+    pkt[0] = 0x00;
+    pkt[1] = cmd;
     pkt[2] = 0x00;
-    pkt[3] = 0x01; // Type 1 = Pure Solid Static
+    pkt[3] = 0x01; // Pure Solid Static
     pkt[4] = 0x01; // Speed 1
     pkt[5] = brightness;
     pkt[6] = color_idx;

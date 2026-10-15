@@ -35,6 +35,7 @@ impl Default for RgbColor {
 }
 
 impl RgbColor {
+    #[allow(dead_code)]
     pub fn from_u8(val: u8) -> Self {
         match val {
             1 => Self::Red,

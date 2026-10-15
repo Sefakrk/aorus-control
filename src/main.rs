@@ -4,6 +4,7 @@ mod config;
 mod hal;
 
 use std::sync::Arc;
+use std::time::Duration;
 use parking_lot::Mutex;
 use config::AppConfig;
 use hal::models::*;
@@ -26,7 +27,6 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let cfg = config.lock();
 
-        // Sync UI properties with loaded config
         let mode_str = match cfg.fan_mode {
             FanMode::Quiet => "Quiet",
             FanMode::Gaming => "Gaming",
@@ -72,26 +72,33 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 5. Keyboard Brightness Callback
+    // 5. Keyboard Brightness Live Drag Callback (Zero disk I/O, fast lighting update)
     {
         let lc_clone = lighting_controller.clone();
         let cfg_clone = config.clone();
 
         main_window.on_set_keyboard_brightness(move |val| {
             let br = val.clamp(0, 100) as u8;
-            let color = {
-                let mut cfg = cfg_clone.lock();
-                cfg.kb_brightness = br;
-                let _ = cfg.save();
-                cfg.kb_color
-            };
+            let color = cfg_clone.lock().kb_color;
 
             let mut lc = lc_clone.lock();
             let _ = lc.set_zone_lighting(RgbZone::Keyboard, color, br);
         });
     }
 
-    // 6. Lightbar Color Callback
+    // 6. Keyboard Brightness Save Callback (Saves to disk only on release)
+    {
+        let cfg_clone = config.clone();
+
+        main_window.on_save_keyboard_brightness(move |val| {
+            let br = val.clamp(0, 100) as u8;
+            let mut cfg = cfg_clone.lock();
+            cfg.kb_brightness = br;
+            let _ = cfg.save();
+        });
+    }
+
+    // 7. Lightbar Color Callback
     {
         let lc_clone = lighting_controller.clone();
         let cfg_clone = config.clone();
@@ -111,7 +118,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 7. Lightbar Toggle Callback
+    // 8. Lightbar Toggle Callback
     {
         let lc_clone = lighting_controller.clone();
         let cfg_clone = config.clone();
@@ -130,7 +137,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 8. Fan Mode Callback
+    // 9. Fan Mode Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -154,7 +161,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 9. Custom Fan Speed Callback
+    // 10. Custom Fan Speed Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -174,7 +181,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 10. Battery Limit Callback
+    // 11. Battery Limit Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -191,38 +198,34 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 11. Periodic Telemetry Update (every 2 seconds)
+    // 12. Non-blocking Background Telemetry Thread
+    // Does not block UI thread; updates via slint::invoke_from_event_loop
     {
         let tc_clone = thermal_controller.clone();
         let window_weak = main_window.as_weak();
-        let timer = slint::Timer::default();
 
-        timer.start(
-            slint::TimerMode::Repeated,
-            std::time::Duration::from_millis(2000),
-            move || {
-                if let Some(window) = window_weak.upgrade() {
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_millis(2000));
+
+                let telemetry_opt = {
                     let tc = tc_clone.lock();
-                    if let Ok(telemetry) = tc.get_telemetry() {
-                        window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
-                        window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
-                        let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
-                        window.set_fan_rpm(format!("{} RPM", rpm).into());
-                    }
-                }
-            },
-        );
+                    tc.get_telemetry().ok()
+                };
 
-        // Initial Telemetry Read
-        {
-            let tc = thermal_controller.lock();
-            if let Ok(telemetry) = tc.get_telemetry() {
-                main_window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
-                main_window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
-                let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
-                main_window.set_fan_rpm(format!("{} RPM", rpm).into());
+                if let Some(telemetry) = telemetry_opt {
+                    let weak = window_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(window) = weak.upgrade() {
+                            window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
+                            window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
+                            let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
+                            window.set_fan_rpm(format!("{} RPM", rpm).into());
+                        }
+                    });
+                }
             }
-        }
+        });
     }
 
     main_window.run()
