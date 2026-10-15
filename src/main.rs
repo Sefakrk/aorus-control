@@ -23,6 +23,11 @@ const PWM_TABLE: [(u8, u8); 16] = [
     (85, 194), (90, 206), (95, 217), (100, 229),
 ];
 
+const CURVE_QUIET: [u8; 5] = [0, 22, 28, 35, 45];
+const CURVE_NORMAL: [u8; 5] = [30, 40, 55, 65, 95];
+const CURVE_GAMING: [u8; 5] = [35, 45, 70, 85, 100];
+const CURVE_TURBO: [u8; 5] = [100, 100, 100, 100, 100];
+
 fn interpolate_curve(temp: u8, curve: &[u8; 5]) -> u8 {
     let t = temp as f32;
     let p0 = curve[0] as f32;
@@ -91,13 +96,19 @@ fn main() -> Result<(), slint::PlatformError> {
         };
         main_window.set_active_mode(mode_str.into());
 
-        // Set 5-point curve values in UI
-        main_window.set_curve_50(cfg.custom_curve[0] as f32);
-        main_window.set_curve_60(cfg.custom_curve[1] as f32);
-        main_window.set_curve_70(cfg.custom_curve[2] as f32);
-        main_window.set_curve_80(cfg.custom_curve[3] as f32);
-        main_window.set_curve_90(cfg.custom_curve[4] as f32);
-
+        // Set 5-point curve values in UI based on active mode
+        let active_curve = match cfg.fan_mode {
+            FanMode::Quiet => CURVE_QUIET,
+            FanMode::Gaming => CURVE_GAMING,
+            FanMode::Turbo => CURVE_TURBO,
+            FanMode::Custom => cfg.custom_curve,
+            _ => CURVE_NORMAL,
+        };
+        main_window.set_curve_50(active_curve[0] as f32);
+        main_window.set_curve_60(active_curve[1] as f32);
+        main_window.set_curve_70(active_curve[2] as f32);
+        main_window.set_curve_80(active_curve[3] as f32);
+        main_window.set_curve_90(active_curve[4] as f32);
         main_window.set_kb_brightness(cfg.kb_brightness as f32);
         main_window.set_active_kb_color(cfg.kb_color.to_name().into());
         main_window.set_active_bar_color(cfg.bar_color.to_name().into());
@@ -247,14 +258,15 @@ fn main() -> Result<(), slint::PlatformError> {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
         let custom_target_clone = last_applied_custom_target.clone();
+        let window_weak = main_window.as_weak();
 
         main_window.on_set_fan_mode(move |mode_str| {
-            let mode = match mode_str.as_str() {
-                "Quiet" => FanMode::Quiet,
-                "Gaming" => FanMode::Gaming,
-                "Turbo" => FanMode::Turbo,
-                "Custom" => FanMode::Custom,
-                _ => FanMode::Normal,
+            let (mode, curve) = match mode_str.as_str() {
+                "Quiet" => (FanMode::Quiet, CURVE_QUIET),
+                "Gaming" => (FanMode::Gaming, CURVE_GAMING),
+                "Turbo" => (FanMode::Turbo, CURVE_TURBO),
+                "Custom" => (FanMode::Custom, cfg_clone.lock().custom_curve),
+                _ => (FanMode::Normal, CURVE_NORMAL),
             };
 
             *custom_target_clone.lock() = None;
@@ -265,6 +277,14 @@ fn main() -> Result<(), slint::PlatformError> {
                 let _ = cfg.save();
             }
 
+            if let Some(w) = window_weak.upgrade() {
+                w.set_curve_50(curve[0] as f32);
+                w.set_curve_60(curve[1] as f32);
+                w.set_curve_70(curve[2] as f32);
+                w.set_curve_80(curve[3] as f32);
+                w.set_curve_90(curve[4] as f32);
+            }
+
             let mut tc = tc_clone.lock();
             let _ = tc.set_fan_mode(mode);
         });
@@ -273,15 +293,26 @@ fn main() -> Result<(), slint::PlatformError> {
     // 10. Custom Curve Point Change Callback
     {
         let cfg_clone = config.clone();
+        let tc_clone = thermal_controller.clone();
+        let window_weak = main_window.as_weak();
 
         main_window.on_set_curve_point(move |idx, val| {
             if idx >= 0 && idx < 5 {
                 let mut cfg = cfg_clone.lock();
                 cfg.custom_curve[idx as usize] = (val as u8).clamp(0, 100);
+
+                // Auto-switch to Custom mode when any slider is moved!
+                if cfg.fan_mode != FanMode::Custom {
+                    cfg.fan_mode = FanMode::Custom;
+                    if let Some(w) = window_weak.upgrade() {
+                        w.set_active_mode("Custom".into());
+                    }
+                    let mut tc = tc_clone.lock();
+                    let _ = tc.set_fan_mode(FanMode::Custom);
+                }
             }
         });
     }
-
     // 11. Save Custom Curve Callback (on slider release)
     {
         let cfg_clone = config.clone();

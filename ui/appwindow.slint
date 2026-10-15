@@ -203,7 +203,7 @@ export component AppWindow inherits Window {
     title: "AORUS 16X Control";
     icon: @image-url("../assets/icon.png");
     width: 740px;
-    height: 560px;
+    height: 575px;
     background: #0d0f14;
     default-font-family: "Segoe UI";
 
@@ -252,7 +252,7 @@ export component AppWindow inherits Window {
 
         // 1. TOPBAR: Fixed on all tabs
         Rectangle {
-            height: 56px;
+            height: 68px;
             background: #0d0f14;
 
             // Bottom border line
@@ -264,13 +264,15 @@ export component AppWindow inherits Window {
             }
 
             HorizontalLayout {
-                padding-left: 18px;
-                padding-right: 18px;
+                padding-top: 14px;
+                padding-bottom: 14px;
+                padding-left: 20px;
+                padding-right: 20px;
                 alignment: space-between;
 
                 VerticalLayout {
                     alignment: center;
-                    spacing: 1px;
+                    spacing: 2px;
                     Text {
                         text: "AORUS 16X";
                         font-size: 17px;
@@ -288,18 +290,19 @@ export component AppWindow inherits Window {
                 // 4 Sensor Badges (CPU Fan & GPU Fan labels)
                 HorizontalLayout {
                     alignment: center;
-                    spacing: 6px;
+                    spacing: 8px;
 
                     Rectangle {
-                        height: 34px;
+                        height: 38px;
                         background: #161922;
-                        border-radius: 8px;
+                        border-radius: 9px;
                         border-width: 1px;
                         border-color: #262c3d;
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 5px;
+                            alignment: center;
                             Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.cpu_temp; font-size: 12px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
                             Text { text: "(" + root.cpu_usage + ")"; font-size: 10px; color: #6ee7b7; vertical-alignment: center; }
@@ -307,15 +310,16 @@ export component AppWindow inherits Window {
                     }
 
                     Rectangle {
-                        height: 34px;
+                        height: 38px;
                         background: #161922;
-                        border-radius: 8px;
+                        border-radius: 9px;
                         border-width: 1px;
                         border-color: #262c3d;
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 5px;
+                            alignment: center;
                             Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.gpu_temp; font-size: 12px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
                             Text { text: "(" + root.gpu_usage + ")"; font-size: 10px; color: #7dd3fc; vertical-alignment: center; }
@@ -323,30 +327,32 @@ export component AppWindow inherits Window {
                     }
 
                     Rectangle {
-                        height: 34px;
+                        height: 38px;
                         background: #161922;
-                        border-radius: 8px;
+                        border-radius: 9px;
                         border-width: 1px;
                         border-color: #262c3d;
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 5px;
+                            alignment: center;
                             Text { text: "CPU Fan"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
                         }
                     }
 
                     Rectangle {
-                        height: 34px;
+                        height: 38px;
                         background: #161922;
-                        border-radius: 8px;
+                        border-radius: 9px;
                         border-width: 1px;
                         border-color: #262c3d;
                         HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 5px;
+                            alignment: center;
                             Text { text: "GPU Fan"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
                         }
@@ -514,7 +520,7 @@ export component AppWindow inherits Window {
                                 HorizontalLayout {
                                     alignment: space-between;
                                     Text {
-                                        text: "📊  ÖZEL FAN EĞRİSİ (SICAKLIK BASAMAKLARI)";
+                                        text: "📊  FAN EĞRİSİ (" + root.active_mode + " Modu)";
                                         font-size: 11px;
                                         font-weight: 800;
                                         color: #f59e0b;
@@ -522,10 +528,10 @@ export component AppWindow inherits Window {
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: root.active_mode == "Custom" ? "AKTİF KULLANILIYOR" : "Custom modunda devreye girer";
+                                        text: root.active_mode == "Custom" ? "ÖZEL EĞRİ DEVREDE" : "Slider kaydırıldığında otomatik Custom'a geçer";
                                         font-size: 10px;
                                         font-weight: 700;
-                                        color: root.active_mode == "Custom" ? #00ffa3 : #6b7280;
+                                        color: root.active_mode == "Custom" ? #00ffa3 : #9ca3af;
                                         vertical-alignment: center;
                                     }
                                 }
