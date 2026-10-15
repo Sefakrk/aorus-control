@@ -13,6 +13,7 @@ pub struct AppConfig {
     pub bar_enabled: bool,
     pub battery_limit: bool,
     pub gpu_mode: GpuMode,
+    pub dgpu_killed: bool,
 }
 
 impl Default for AppConfig {
@@ -26,6 +27,7 @@ impl Default for AppConfig {
             bar_enabled: true,
             battery_limit: true,
             gpu_mode: GpuMode::Hybrid,
+            dgpu_killed: false,
         }
     }
 }

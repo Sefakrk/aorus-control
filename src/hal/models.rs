@@ -52,6 +52,19 @@ impl GpuMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub enum GpuPowerState {
+    Active,
+    Killed,
+}
+
+impl Default for GpuPowerState {
+    fn default() -> Self {
+        Self::Active
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum RgbColor {
     Off = 0,

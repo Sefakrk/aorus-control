@@ -12,6 +12,8 @@ pub trait ThermalController: Send + Sync {
     fn set_battery_charge_limit(&mut self, enabled: bool) -> Result<(), String>;
     fn get_gpu_mode(&self) -> Result<GpuMode, String>;
     fn set_gpu_mode(&mut self, mode: GpuMode) -> Result<(), String>;
+    fn get_dgpu_status(&self) -> Result<bool, String>;
+    fn set_dgpu_enabled(&mut self, enabled: bool) -> Result<(), String>;
 }
 
 pub trait LightingController: Send + Sync {

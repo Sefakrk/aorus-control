@@ -114,6 +114,16 @@ fn main() -> Result<(), slint::PlatformError> {
             main_window.set_active_gpu_mode(cfg.gpu_mode.to_name().into());
         }
 
+        // Read REAL dGPU hardware status on startup
+        if let Ok(is_active) = tc.get_dgpu_status() {
+            let is_killed = !is_active;
+            main_window.set_dgpu_killed(is_killed);
+            cfg.dgpu_killed = is_killed;
+            let _ = cfg.save();
+        } else {
+            main_window.set_dgpu_killed(cfg.dgpu_killed);
+        }
+
         let mut lc = lighting_controller.lock();
         let _ = lc.set_zone_lighting(RgbZone::Keyboard, cfg.kb_color, cfg.kb_brightness);
         let bar_color = if cfg.bar_enabled { cfg.bar_color } else { RgbColor::Off };
@@ -250,7 +260,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let custom_target_clone = last_applied_custom_target.clone();
 
         main_window.on_save_curve(move || {
-            *custom_target_clone.lock() = None; // Reset hysteresis so new curve applies immediately
+            *custom_target_clone.lock() = None;
             let cfg = cfg_clone.lock();
             let _ = cfg.save();
         });
@@ -260,22 +270,87 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
+        let window_weak = main_window.as_weak();
 
         main_window.on_set_gpu_mode(move |mode_str| {
             let mode = GpuMode::from_name(mode_str.as_str());
 
-            {
+            // If switching to Discrete while dGPU was killed, auto-enable dGPU first
+            if mode == GpuMode::Discrete {
+                let mut tc = tc_clone.lock();
+                let _ = tc.set_dgpu_enabled(true);
+                if let Some(w) = window_weak.upgrade() {
+                    w.set_dgpu_killed(false);
+                }
+                let mut cfg = cfg_clone.lock();
+                cfg.dgpu_killed = false;
+                cfg.gpu_mode = mode;
+                let _ = cfg.save();
+                let _ = tc.set_gpu_mode(mode);
+            } else {
                 let mut cfg = cfg_clone.lock();
                 cfg.gpu_mode = mode;
                 let _ = cfg.save();
+                let mut tc = tc_clone.lock();
+                let _ = tc.set_gpu_mode(mode);
             }
-
-            let mut tc = tc_clone.lock();
-            let _ = tc.set_gpu_mode(mode);
         });
     }
 
-    // 13. Battery Limit Callback
+    // 13. dGPU Kill-Switch Callback (with safety lock)
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
+        let window_weak = main_window.as_weak();
+
+        main_window.on_toggle_dgpu_kill(move || {
+            let (current_gpu_mode, is_killed) = {
+                let cfg = cfg_clone.lock();
+                (cfg.gpu_mode, cfg.dgpu_killed)
+            };
+
+            // SAFETY LOCK: Cannot kill dGPU in Discrete mode (black screen prevention!)
+            if current_gpu_mode == GpuMode::Discrete {
+                if let Some(w) = window_weak.upgrade() {
+                    w.set_active_gpu_mode("Hybrid".into());
+                    w.set_dgpu_notice("⚠️ Discrete moddayken dGPU kapatılamaz (siyah ekran riski)! MUX Hybrid moda alındı, lütfen önce sistemi yeniden başlatın.".into());
+                }
+
+                let mut tc = tc_clone.lock();
+                let _ = tc.set_gpu_mode(GpuMode::Hybrid);
+                let mut cfg = cfg_clone.lock();
+                cfg.gpu_mode = GpuMode::Hybrid;
+                let _ = cfg.save();
+                return;
+            }
+
+            // In Hybrid mode: safely toggle dGPU state
+            let mut tc = tc_clone.lock();
+            if is_killed {
+                // Re-enable dGPU
+                let _ = tc.set_dgpu_enabled(true);
+                if let Some(w) = window_weak.upgrade() {
+                    w.set_dgpu_killed(false);
+                    w.set_dgpu_notice("✅ RTX 4060 başarıyla açıldı.".into());
+                }
+                let mut cfg = cfg_clone.lock();
+                cfg.dgpu_killed = false;
+                let _ = cfg.save();
+            } else {
+                // Kill dGPU for maximum battery conservation
+                let _ = tc.set_dgpu_enabled(false);
+                if let Some(w) = window_weak.upgrade() {
+                    w.set_dgpu_killed(true);
+                    w.set_dgpu_notice("✅ RTX 4060 kapatıldı. Maksimum pil tasarrufu devrede (1-2 sn kırpışma normaldir).".into());
+                }
+                let mut cfg = cfg_clone.lock();
+                cfg.dgpu_killed = true;
+                let _ = cfg.save();
+            }
+        });
+    }
+
+    // 14. Battery Limit Callback
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -292,8 +367,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 14. Non-blocking Background Telemetry & Custom Fan Curve Loop
-    // Existing 2-second loop extended without spawning new threads
+    // 15. Non-blocking Background Telemetry & Custom Fan Curve Loop
     {
         let window_weak = main_window.as_weak();
         let cfg_clone = config.clone();

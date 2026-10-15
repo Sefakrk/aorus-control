@@ -266,7 +266,6 @@ impl ThermalController for WindowsThermalController {
                 "#
             }
             FanMode::Custom => {
-                // Custom curve will be dynamically applied by background telemetry loop
                 return Ok(());
             }
         };
@@ -340,6 +339,55 @@ impl ThermalController for WindowsThermalController {
         );
 
         run_powershell_silent(&script);
+        Ok(())
+    }
+
+    fn get_dgpu_status(&self) -> Result<bool, String> {
+        let script = r#"
+            $dev = Get-PnpDevice -Class Display | Where-Object { $_.Manufacturer -like '*NVIDIA*' -or $_.FriendlyName -like '*NVIDIA*' -or $_.InstanceId -like '*VEN_10DE*' } | Select-Object -First 1
+            if ($dev) {
+                if ($dev.Status -eq 'OK') {
+                    Write-Output 'OK'
+                } else {
+                    Write-Output 'DISABLED'
+                }
+            }
+        "#;
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if text == "OK" {
+            Ok(true)
+        } else if text == "DISABLED" {
+            Ok(false)
+        } else {
+            Err("NVIDIA GPU device not found in Display class".to_string())
+        }
+    }
+
+    fn set_dgpu_enabled(&mut self, enabled: bool) -> Result<(), String> {
+        let script = if enabled {
+            r#"
+            $dev = Get-PnpDevice -Class Display | Where-Object { $_.Manufacturer -like '*NVIDIA*' -or $_.FriendlyName -like '*NVIDIA*' -or $_.InstanceId -like '*VEN_10DE*' } | Select-Object -First 1
+            if ($dev) {
+                Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+            }
+            "#
+        } else {
+            r#"
+            $dev = Get-PnpDevice -Class Display | Where-Object { $_.Manufacturer -like '*NVIDIA*' -or $_.FriendlyName -like '*NVIDIA*' -or $_.InstanceId -like '*VEN_10DE*' } | Select-Object -First 1
+            if ($dev) {
+                Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+            }
+            "#
+        };
+
+        run_powershell_silent(script);
         Ok(())
     }
 }

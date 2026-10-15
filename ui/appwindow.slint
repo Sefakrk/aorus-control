@@ -144,6 +144,8 @@ export component AppWindow inherits Window {
     in-out property <float> kb_brightness: 100;
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_gpu_mode: "Hybrid";
+    in-out property <bool> dgpu_killed: false;
+    in-out property <string> dgpu_notice: "ℹ️ dGPU kapatıldığında ekranda 1-2 sn kırpışma olur. Yeniden başlatma gerekmez.";
     in-out property <string> active_kb_color: "Blue";
     in-out property <string> active_bar_color: "Blue";
     in-out property <bool> lightbar_enabled: true;
@@ -153,6 +155,7 @@ export component AppWindow inherits Window {
     callback set_curve_point(int, int);
     callback save_curve();
     callback set_gpu_mode(string);
+    callback toggle_dgpu_kill();
     callback set_keyboard_color(string);
     callback set_keyboard_brightness(float);
     callback save_keyboard_brightness(float);
@@ -414,7 +417,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Section 3: MUX Switch
+        // Section 3: MUX Switch & dGPU Kill-Switch
         Rectangle {
             background: #141720;
             border-radius: 12px;
@@ -428,7 +431,7 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     alignment: space-between;
                     Text {
-                        text: "🎮  GPU ÇALIŞMA MODU (MUX SWITCH)";
+                        text: "🎮  GPU ÇALIŞMA MODU & D-GPU KILL-SWITCH";
                         font-size: 11px;
                         font-weight: 800;
                         color: #c084fc;
@@ -436,10 +439,10 @@ export component AppWindow inherits Window {
                         vertical-alignment: center;
                     }
                     Text {
-                        text: "Aktif Donanım: " + root.active_gpu_mode;
+                        text: root.dgpu_killed ? "dGPU: KAPALI (Maks Pil)" : ("Aktif Donanım: " + root.active_gpu_mode);
                         font-size: 11px;
                         font-weight: 700;
-                        color: root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8;
+                        color: root.dgpu_killed ? #ec4899 : (root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8);
                         vertical-alignment: center;
                     }
                 }
@@ -450,9 +453,8 @@ export component AppWindow inherits Window {
                     ModeButton {
                         title: "Hybrid (Optimus)";
                         icon: "🔋";
-                        is_active: root.active_gpu_mode == "Hybrid";
+                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Hybrid";
                         clicked => {
-                            root.active_gpu_mode = "Hybrid";
                             root.set_gpu_mode("Hybrid");
                         }
                     }
@@ -460,18 +462,27 @@ export component AppWindow inherits Window {
                     ModeButton {
                         title: "Discrete (dGPU)";
                         icon: "⚡";
-                        is_active: root.active_gpu_mode == "Discrete";
+                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Discrete";
                         clicked => {
-                            root.active_gpu_mode = "Discrete";
                             root.set_gpu_mode("Discrete");
+                        }
+                    }
+
+                    ModeButton {
+                        title: "dGPU Kapalı (Maks Pil)";
+                        icon: "🚫";
+                        is_active: root.dgpu_killed;
+                        clicked => {
+                            root.toggle_dgpu_kill();
                         }
                     }
                 }
 
                 Text {
-                    text: "⚠️ MUX modu değişikliği donanım seviyesindedir. Etkili olması için sistemi yeniden başlatmanız gerekir.";
+                    text: root.dgpu_notice;
                     font-size: 10px;
                     color: #f59e0b;
+                    wrap: word-wrap;
                 }
             }
         }
