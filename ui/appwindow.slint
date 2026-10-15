@@ -64,8 +64,8 @@ export component AppWindow inherits Window {
     in-out property <string> cpu_temp: "-- °C";
     in-out property <string> gpu_temp: "-- °C";
     in-out property <string> fan_rpm: "-- RPM";
-    in-out property <int> fan_speed: 60;
-    in-out property <int> kb_brightness: 100;
+    in-out property <float> fan_speed: 60;
+    in-out property <float> kb_brightness: 100;
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_kb_color: "Blue";
     in-out property <string> active_bar_color: "Blue";
@@ -214,7 +214,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Custom fan speed slider
+                // Custom fan speed slider with smooth 2-way binding
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
@@ -227,13 +227,10 @@ export component AppWindow inherits Window {
                     Slider {
                         minimum: 30;
                         maximum: 100;
-                        value: root.fan_speed;
-                        changed(val) => {
-                            root.fan_speed = Math.round(val);
-                        }
+                        value <=> root.fan_speed;
                     }
                     Text {
-                        text: "\{root.fan_speed}%";
+                        text: "\{Math.round(root.fan_speed)}%";
                         font-size: 13px;
                         font-weight: 700;
                         color: #ffffff;
@@ -244,7 +241,7 @@ export component AppWindow inherits Window {
                         text: "Apply";
                         clicked => {
                             root.active_mode = "Manual";
-                            root.set_custom_fan(root.fan_speed);
+                            root.set_custom_fan(Math.round(root.fan_speed));
                         }
                     }
                 }
@@ -326,7 +323,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Brightness slider
+                // Brightness slider with smooth 2-way binding
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
@@ -339,14 +336,13 @@ export component AppWindow inherits Window {
                     Slider {
                         minimum: 0;
                         maximum: 100;
-                        value: root.kb_brightness;
+                        value <=> root.kb_brightness;
                         changed(val) => {
-                            root.kb_brightness = Math.round(val);
-                            root.set_keyboard_brightness(root.kb_brightness);
+                            root.set_keyboard_brightness(Math.round(val));
                         }
                     }
                     Text {
-                        text: "\{root.kb_brightness}%";
+                        text: "\{Math.round(root.kb_brightness)}%";
                         font-size: 13px;
                         font-weight: 700;
                         color: #ffffff;
