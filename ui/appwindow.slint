@@ -1,10 +1,10 @@
-﻿import { Button, Switch } from "std-widgets.slint";
+import { Button, Switch } from "std-widgets.slint";
 
 component ColorChip inherits TouchArea {
     in property <color> chip_color;
     in property <bool> is_selected: false;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     mouse-cursor: pointer;
 
     Rectangle {
@@ -21,7 +21,7 @@ component ModeButton inherits TouchArea {
     in property <string> title;
     in property <string> icon;
     in property <bool> is_active: false;
-    height: 52px;
+    height: 48px;
     mouse-cursor: pointer;
 
     Rectangle {
@@ -98,7 +98,7 @@ component NavTab inherits TouchArea {
     in property <string> title;
     in property <string> subtitle;
     in property <bool> is_active: false;
-    height: 50px;
+    height: 52px;
     mouse-cursor: pointer;
 
     Rectangle {
@@ -137,7 +137,7 @@ component CustomSlider inherits Rectangle {
     callback changed(float);
     callback released(float);
 
-    height: 26px;
+    height: 24px;
     min-width: 180px;
     horizontal-stretch: 1;
 
@@ -163,9 +163,9 @@ component CustomSlider inherits Rectangle {
     Rectangle {
         x: root.ratio * (parent.width - self.width);
         y: (parent.height - self.height) / 2;
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
         background: #ffffff;
         border-width: 2px;
         border-color: #00ffa3;
@@ -207,9 +207,9 @@ export component AppWindow inherits Window {
     default-font-family: "Segoe UI";
 
     in-out property <int> active_tab: 0;
-    in-out property <string> cpu_temp: "-- Â°C";
+    in-out property <string> cpu_temp: "-- °C";
     in-out property <string> cpu_usage: "0%";
-    in-out property <string> gpu_temp: "-- Â°C";
+    in-out property <string> gpu_temp: "-- °C";
     in-out property <string> gpu_usage: "0%";
     in-out property <string> fan1_rpm: "-- RPM";
     in-out property <string> fan2_rpm: "-- RPM";
@@ -222,7 +222,7 @@ export component AppWindow inherits Window {
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_gpu_mode: "Hybrid";
     in-out property <bool> dgpu_killed: false;
-    in-out property <string> dgpu_notice: "â„¹ï¸ dGPU kapatÄ±ldÄ±ÄŸÄ±nda ekranda 1-2 sn kÄ±rpÄ±ÅŸma olur. Yeniden baÅŸlatma gerekmez.";
+    in-out property <string> dgpu_notice: "ℹ️ dGPU kapatıldığında ekranda 1-2 sn kırpışma olur. Yeniden başlatma gerekmez.";
     in-out property <string> active_kb_color: "Blue";
     in-out property <string> active_bar_color: "Blue";
     in-out property <bool> lightbar_enabled: true;
@@ -246,7 +246,7 @@ export component AppWindow inherits Window {
 
         // 1. TOPBAR: Fixed on all tabs
         Rectangle {
-            height: 58px;
+            height: 56px;
             background: #0d0f14;
 
             // Bottom border line
@@ -279,7 +279,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // 4 Sensor Badges
+                // 4 Sensor Badges (CPU Fan & GPU Fan labels)
                 HorizontalLayout {
                     alignment: center;
                     spacing: 6px;
@@ -326,7 +326,7 @@ export component AppWindow inherits Window {
                             padding-left: 8px;
                             padding-right: 8px;
                             spacing: 4px;
-                            Text { text: "FAN 1"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: "CPU Fan"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
                         }
                     }
@@ -341,7 +341,7 @@ export component AppWindow inherits Window {
                             padding-left: 8px;
                             padding-right: 8px;
                             spacing: 4px;
-                            Text { text: "FAN 2"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: "GPU Fan"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
                             Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
                         }
                     }
@@ -354,7 +354,7 @@ export component AppWindow inherits Window {
             padding: 0px;
             spacing: 0px;
 
-            // LEFT SIDEBAR (5 Tabs)
+            // LEFT SIDEBAR (4 Merged Tabs)
             Rectangle {
                 width: 172px;
                 background: #0d0f14;
@@ -376,34 +376,28 @@ export component AppWindow inherits Window {
                     alignment: start;
 
                     NavTab {
-                        title: "ðŸŒ€ Fan & GÃ¼Ã§";
-                        subtitle: "mod + eÄŸri";
+                        title: "🌀 Fan & Güç";
+                        subtitle: "mod + eğri";
                         is_active: root.active_tab == 0;
                         clicked => { root.active_tab = 0; }
                     }
                     NavTab {
-                        title: "ðŸŽ® GPU / MUX";
-                        subtitle: "hybrid Â· dgpu Â· kill";
+                        title: "🎮 GPU / MUX";
+                        subtitle: "hybrid · dgpu · kill";
                         is_active: root.active_tab == 1;
                         clicked => { root.active_tab = 1; }
                     }
                     NavTab {
-                        title: "âŒ¨ï¸ Klavye";
-                        subtitle: "rgb + parlaklÄ±k";
+                        title: "💡 Aydınlatma";
+                        subtitle: "klavye + beacon";
                         is_active: root.active_tab == 2;
                         clicked => { root.active_tab = 2; }
                     }
                     NavTab {
-                        title: "âœ¨ Arka IÅŸÄ±k";
-                        subtitle: "beacon + gÃ¼Ã§";
+                        title: "🔋 Pil";
+                        subtitle: "%80 limit";
                         is_active: root.active_tab == 3;
                         clicked => { root.active_tab = 3; }
-                    }
-                    NavTab {
-                        title: "ðŸ”‹ Pil";
-                        subtitle: "%80 limit";
-                        is_active: root.active_tab == 4;
-                        clicked => { root.active_tab = 4; }
                     }
                 }
             }
@@ -414,14 +408,14 @@ export component AppWindow inherits Window {
                 background: #0d0f14;
 
                 VerticalLayout {
-                    padding-top: 14px;
-                    padding-bottom: 14px;
-                    padding-left: 18px;
-                    padding-right: 18px;
-                    spacing: 12px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 10px;
                     alignment: start;
 
-                    // TAB 0: FAN & GÃœÃ‡
+                    // TAB 0: FAN & GÜÇ
                     if root.active_tab == 0 : VerticalLayout {
                         spacing: 10px;
 
@@ -432,7 +426,7 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 12px;
+                                padding-top: 10px; padding-bottom: 10px; padding-left: 12px; padding-right: 12px;
                                 spacing: 8px;
 
                                 Text {
@@ -448,7 +442,7 @@ export component AppWindow inherits Window {
 
                                     ModeButton {
                                         title: "Quiet";
-                                        icon: "ðŸƒ";
+                                        icon: "🍃";
                                         is_active: root.active_mode == "Quiet";
                                         clicked => {
                                             root.active_mode = "Quiet";
@@ -457,7 +451,7 @@ export component AppWindow inherits Window {
                                     }
                                     ModeButton {
                                         title: "Normal";
-                                        icon: "âš¡";
+                                        icon: "⚡";
                                         is_active: root.active_mode == "Normal";
                                         clicked => {
                                             root.active_mode = "Normal";
@@ -466,7 +460,7 @@ export component AppWindow inherits Window {
                                     }
                                     ModeButton {
                                         title: "Gaming";
-                                        icon: "ðŸŽ®";
+                                        icon: "🎮";
                                         is_active: root.active_mode == "Gaming";
                                         clicked => {
                                             root.active_mode = "Gaming";
@@ -475,7 +469,7 @@ export component AppWindow inherits Window {
                                     }
                                     ModeButton {
                                         title: "Turbo";
-                                        icon: "ðŸš€";
+                                        icon: "🚀";
                                         is_active: root.active_mode == "Turbo";
                                         clicked => {
                                             root.active_mode = "Turbo";
@@ -484,7 +478,7 @@ export component AppWindow inherits Window {
                                     }
                                     ModeButton {
                                         title: "Custom";
-                                        icon: "ðŸ› ï¸";
+                                        icon: "🛠️";
                                         is_active: root.active_mode == "Custom";
                                         clicked => {
                                             root.active_mode = "Custom";
@@ -502,13 +496,13 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 12px;
-                                spacing: 7px;
+                                padding-top: 10px; padding-bottom: 10px; padding-left: 12px; padding-right: 12px;
+                                spacing: 6px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
                                     Text {
-                                        text: "ðŸ“Š  Ã–ZEL FAN EÄžRÄ°SÄ° (SICAKLIK BASAMAKLARI)";
+                                        text: "📊  ÖZEL FAN EĞRİSİ (SICAKLIK BASAMAKLARI)";
                                         font-size: 11px;
                                         font-weight: 800;
                                         color: #f59e0b;
@@ -516,7 +510,7 @@ export component AppWindow inherits Window {
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: root.active_mode == "Custom" ? "AKTÄ°F KULLANILIYOR" : "Custom modunda devreye girer";
+                                        text: root.active_mode == "Custom" ? "AKTİF KULLANILIYOR" : "Custom modunda devreye girer";
                                         font-size: 10px;
                                         font-weight: 700;
                                         color: root.active_mode == "Custom" ? #00ffa3 : #6b7280;
@@ -526,7 +520,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     spacing: 10px;
-                                    Text { text: "50 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    Text { text: "50 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
                                     CustomSlider {
                                         value: root.curve_50;
                                         changed(v) => { root.curve_50 = v; root.set_curve_point(0, Math.round(v)); }
@@ -537,7 +531,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     spacing: 10px;
-                                    Text { text: "60 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    Text { text: "60 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
                                     CustomSlider {
                                         value: root.curve_60;
                                         changed(v) => { root.curve_60 = v; root.set_curve_point(1, Math.round(v)); }
@@ -548,7 +542,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     spacing: 10px;
-                                    Text { text: "70 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    Text { text: "70 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
                                     CustomSlider {
                                         value: root.curve_70;
                                         changed(v) => { root.curve_70 = v; root.set_curve_point(2, Math.round(v)); }
@@ -559,7 +553,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     spacing: 10px;
-                                    Text { text: "80 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    Text { text: "80 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
                                     CustomSlider {
                                         value: root.curve_80;
                                         changed(v) => { root.curve_80 = v; root.set_curve_point(3, Math.round(v)); }
@@ -570,7 +564,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     spacing: 10px;
-                                    Text { text: "90 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    Text { text: "90 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
                                     CustomSlider {
                                         value: root.curve_90;
                                         changed(v) => { root.curve_90 = v; root.set_curve_point(4, Math.round(v)); }
@@ -593,13 +587,13 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 16px;
-                                spacing: 14px;
+                                padding: 14px;
+                                spacing: 12px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
                                     Text {
-                                        text: "ðŸŽ®  GPU Ã‡ALIÅžMA MODU & D-GPU KILL-SWITCH";
+                                        text: "🎮  GPU ÇALIŞMA MODU & D-GPU KILL-SWITCH";
                                         font-size: 11px;
                                         font-weight: 800;
                                         color: #c084fc;
@@ -607,7 +601,7 @@ export component AppWindow inherits Window {
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: root.dgpu_killed ? "dGPU: KAPALI (Maks Pil)" : ("Aktif DonanÄ±m: " + root.active_gpu_mode);
+                                        text: root.dgpu_killed ? "dGPU: KAPALI (Maks Pil)" : ("Aktif Donanım: " + root.active_gpu_mode);
                                         font-size: 11px;
                                         font-weight: 700;
                                         color: root.dgpu_killed ? #ec4899 : (root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8);
@@ -621,7 +615,7 @@ export component AppWindow inherits Window {
                                     MuxButton {
                                         title: "Hybrid (Optimus)";
                                         subtitle: "pil tasarrufu";
-                                        icon: "ðŸ”‹";
+                                        icon: "🔋";
                                         is_active: !root.dgpu_killed && root.active_gpu_mode == "Hybrid";
                                         clicked => {
                                             root.set_gpu_mode("Hybrid");
@@ -631,7 +625,7 @@ export component AppWindow inherits Window {
                                     MuxButton {
                                         title: "Discrete (dGPU)";
                                         subtitle: "maksimum fps";
-                                        icon: "âš¡";
+                                        icon: "⚡";
                                         is_active: !root.dgpu_killed && root.active_gpu_mode == "Discrete";
                                         clicked => {
                                             root.set_gpu_mode("Discrete");
@@ -639,9 +633,9 @@ export component AppWindow inherits Window {
                                     }
 
                                     MuxButton {
-                                        title: "dGPU KapalÄ±";
+                                        title: "dGPU Kapalı";
                                         subtitle: "maks pil modu";
-                                        icon: "ðŸš«";
+                                        icon: "🚫";
                                         is_active: root.dgpu_killed;
                                         clicked => {
                                             root.toggle_dgpu_kill();
@@ -649,19 +643,28 @@ export component AppWindow inherits Window {
                                     }
                                 }
 
-                                Rectangle { background: #161922; border-radius: 8px; HorizontalLayout { padding: 10px; Text {
-                                        text: root.dgpu_notice;
-                                        font-size: 11px;
-                                        color: #f59e0b;
-                                        wrap: word-wrap; } } }
+                                Rectangle {
+                                    background: #161922;
+                                    border-radius: 8px;
+                                    HorizontalLayout {
+                                        padding: 10px;
+                                        Text {
+                                            text: root.dgpu_notice;
+                                            font-size: 11px;
+                                            color: #f59e0b;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // TAB 2: KLAVYE
+                    // TAB 2: AYDINLATMA (KLAVYE + BEACON BİRLEŞİK)
                     if root.active_tab == 2 : VerticalLayout {
-                        spacing: 12px;
+                        spacing: 10px;
 
+                        // Üst Kart: Klavye RGB
                         Rectangle {
                             background: #141720;
                             border-radius: 12px;
@@ -669,13 +672,13 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 16px;
-                                spacing: 14px;
+                                padding: 12px;
+                                spacing: 10px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
                                     Text {
-                                        text: "âŒ¨ï¸  KEYBOARD RGB (SOLID STATIC)";
+                                        text: "⌨️  KEYBOARD RGB (SOLID STATIC)";
                                         font-size: 11px;
                                         font-weight: 800;
                                         color: #00ffa3;
@@ -683,7 +686,7 @@ export component AppWindow inherits Window {
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: "SeÃ§ili: " + root.active_kb_color;
+                                        text: "Seçili: " + root.active_kb_color;
                                         font-size: 11px;
                                         color: #6b7280;
                                         vertical-alignment: center;
@@ -691,7 +694,7 @@ export component AppWindow inherits Window {
                                 }
 
                                 HorizontalLayout {
-                                    spacing: 10px;
+                                    spacing: 8px;
 
                                     ColorChip {
                                         chip_color: #00a2ff;
@@ -738,11 +741,11 @@ export component AppWindow inherits Window {
                                 HorizontalLayout {
                                     spacing: 12px;
                                     Text {
-                                        text: "ParlaklÄ±k:";
+                                        text: "Parlaklık:";
                                         font-size: 12px;
                                         color: #9ca3af;
                                         vertical-alignment: center;
-                                        width: 75px;
+                                        width: 65px;
                                     }
                                     CustomSlider {
                                         minimum: 0;
@@ -767,12 +770,8 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                    }
 
-                    // TAB 3: ARKA IÅžIK
-                    if root.active_tab == 3 : VerticalLayout {
-                        spacing: 12px;
-
+                        // Alt Kart: Arka Işık (Beacon)
                         Rectangle {
                             background: #141720;
                             border-radius: 12px;
@@ -780,13 +779,13 @@ export component AppWindow inherits Window {
                             border-color: #212635;
 
                             VerticalLayout {
-                                padding: 16px;
-                                spacing: 14px;
+                                padding: 12px;
+                                spacing: 10px;
 
                                 HorizontalLayout {
                                     alignment: space-between;
                                     Text {
-                                        text: "âœ¨  REAR LIGHTBAR (AORUS BEACON)";
+                                        text: "✨  REAR LIGHTBAR (AORUS BEACON)";
                                         font-size: 11px;
                                         font-weight: 800;
                                         color: #38bdf8;
@@ -795,7 +794,7 @@ export component AppWindow inherits Window {
                                     }
                                     HorizontalLayout {
                                         spacing: 8px;
-                                        Text { text: "GÃ¼Ã§:"; font-size: 12px; color: #9ca3af; vertical-alignment: center; }
+                                        Text { text: "Güç:"; font-size: 12px; color: #9ca3af; vertical-alignment: center; }
                                         Switch {
                                             checked: root.lightbar_enabled;
                                             toggled => {
@@ -807,7 +806,7 @@ export component AppWindow inherits Window {
                                 }
 
                                 HorizontalLayout {
-                                    spacing: 10px;
+                                    spacing: 8px;
 
                                     ColorChip {
                                         chip_color: #00a2ff;
@@ -852,7 +851,7 @@ export component AppWindow inherits Window {
                                 }
 
                                 Text {
-                                    text: "â„¹ï¸ Ana bar, egzoz ÅŸeridi ve Aorus Beacon projeksiyonu senkronize tek renk olarak sÃ¼rÃ¼lÃ¼r.";
+                                    text: "ℹ️ Ana bar, egzoz şeridi ve Aorus Beacon projeksiyonu senkronize tek renk olarak sürülür.";
                                     font-size: 11px;
                                     color: #6b7280;
                                 }
@@ -860,8 +859,8 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // TAB 4: PÄ°L
-                    if root.active_tab == 4 : VerticalLayout {
+                    // TAB 3: PİL
+                    if root.active_tab == 3 : VerticalLayout {
                         spacing: 12px;
 
                         Rectangle {
@@ -880,14 +879,14 @@ export component AppWindow inherits Window {
                                     VerticalLayout {
                                         spacing: 3px;
                                         Text {
-                                            text: "ðŸ”‹  BATTERY HEALTH CARE";
+                                            text: "🔋  BATTERY HEALTH CARE";
                                             font-size: 11px;
                                             font-weight: 800;
                                             color: #7dd3fc;
                                             letter-spacing: 1px;
                                         }
                                         Text {
-                                            text: "Prizde kullanÄ±rken ÅŸarjÄ± %80'de keserek pil Ã¶mrÃ¼nÃ¼ uzatÄ±r.";
+                                            text: "Prizde kullanırken şarjı %80'de keserek pil ömrünü uzatır.";
                                             font-size: 12px;
                                             color: #6b7280;
                                         }
@@ -909,4 +908,3 @@ export component AppWindow inherits Window {
         }
     }
 }
-
