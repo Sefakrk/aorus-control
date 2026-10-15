@@ -1,141 +1,229 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod hardware;
-mod rgb;
+mod config;
+mod hal;
+
+use std::sync::Arc;
+use parking_lot::Mutex;
+use config::AppConfig;
+use hal::models::*;
+use hal::create_controllers;
 
 slint::include_modules!();
-
-fn preset_to_color_idx(preset: &str) -> u8 {
-    match preset {
-        "Red" => 1,
-        "Green" => 2,
-        "Yellow" => 3,
-        "Blue" => 4,
-        "Orange" => 5,
-        "Purple" => 6,
-        "White" => 7,
-        "Off" => 0,
-        _ => 4, // Default to Blue
-    }
-}
 
 fn main() -> Result<(), slint::PlatformError> {
     let main_window = AppWindow::new()?;
 
-    // State trackers
-    let kb_idx = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(4));
-    let kb_brightness = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(100));
+    // 1. Load persisted configuration
+    let config = Arc::new(Mutex::new(AppConfig::load()));
 
-    let bar_idx = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(4));
-    let bar_enabled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    // 2. Initialize HAL controllers
+    let (thermal_ctrl, lighting_ctrl) = create_controllers();
+    let thermal_controller = Arc::new(Mutex::new(thermal_ctrl));
+    let lighting_controller = Arc::new(Mutex::new(lighting_ctrl));
 
-    // Keyboard Color Callback
+    // 3. Apply persisted configuration to hardware and UI immediately on startup
     {
-        let idx_c = kb_idx.clone();
-        let br_c = kb_brightness.clone();
+        let cfg = config.lock();
+
+        // Sync UI properties with loaded config
+        let mode_str = match cfg.fan_mode {
+            FanMode::Quiet => "Quiet",
+            FanMode::Gaming => "Gaming",
+            FanMode::Turbo => "Turbo",
+            FanMode::Manual(_) => "Manual",
+            _ => "Normal",
+        };
+        main_window.set_active_mode(mode_str.into());
+        main_window.set_fan_speed(cfg.manual_fan_speed as f32);
+        main_window.set_kb_brightness(cfg.kb_brightness as f32);
+        main_window.set_active_kb_color(cfg.kb_color.to_name().into());
+        main_window.set_active_bar_color(cfg.bar_color.to_name().into());
+        main_window.set_lightbar_enabled(cfg.bar_enabled);
+        main_window.set_battery_limit(cfg.battery_limit);
+
+        // Apply to hardware via HAL
+        let mut tc = thermal_controller.lock();
+        let _ = tc.set_fan_mode(cfg.fan_mode);
+        let _ = tc.set_battery_charge_limit(cfg.battery_limit);
+
+        let mut lc = lighting_controller.lock();
+        let _ = lc.set_zone_lighting(RgbZone::Keyboard, cfg.kb_color, cfg.kb_brightness);
+        let bar_color = if cfg.bar_enabled { cfg.bar_color } else { RgbColor::Off };
+        let _ = lc.set_zone_lighting(RgbZone::RearBar, bar_color, 100);
+    }
+
+    // 4. Keyboard Color Callback
+    {
+        let lc_clone = lighting_controller.clone();
+        let cfg_clone = config.clone();
 
         main_window.on_set_keyboard_color(move |preset| {
-            let idx = preset_to_color_idx(preset.as_str());
-            idx_c.store(idx, std::sync::atomic::Ordering::Relaxed);
+            let color = RgbColor::from_name(preset.as_str());
+            let brightness = {
+                let mut cfg = cfg_clone.lock();
+                cfg.kb_color = color;
+                let _ = cfg.save();
+                cfg.kb_brightness
+            };
 
-            if idx == 0 {
-                rgb::turn_keyboard_off();
-            } else {
-                let br = br_c.load(std::sync::atomic::Ordering::Relaxed);
-                rgb::set_keyboard_color(br, idx);
-            }
+            let mut lc = lc_clone.lock();
+            let _ = lc.set_zone_lighting(RgbZone::Keyboard, color, brightness);
         });
     }
 
-    // Keyboard Brightness Callback
+    // 5. Keyboard Brightness Callback
     {
-        let idx_c = kb_idx.clone();
-        let br_c = kb_brightness.clone();
+        let lc_clone = lighting_controller.clone();
+        let cfg_clone = config.clone();
 
         main_window.on_set_keyboard_brightness(move |val| {
             let br = val.clamp(0, 100) as u8;
-            br_c.store(br, std::sync::atomic::Ordering::Relaxed);
+            let color = {
+                let mut cfg = cfg_clone.lock();
+                cfg.kb_brightness = br;
+                let _ = cfg.save();
+                cfg.kb_color
+            };
 
-            let idx = idx_c.load(std::sync::atomic::Ordering::Relaxed);
-            if br == 0 || idx == 0 {
-                rgb::turn_keyboard_off();
-            } else {
-                rgb::set_keyboard_color(br, idx);
-            }
+            let mut lc = lc_clone.lock();
+            let _ = lc.set_zone_lighting(RgbZone::Keyboard, color, br);
         });
     }
 
-    // Lightbar Color Callback
+    // 6. Lightbar Color Callback
     {
-        let idx_c = bar_idx.clone();
-        let en_c = bar_enabled.clone();
+        let lc_clone = lighting_controller.clone();
+        let cfg_clone = config.clone();
 
         main_window.on_set_lightbar_color(move |preset| {
-            let idx = preset_to_color_idx(preset.as_str());
-            idx_c.store(idx, std::sync::atomic::Ordering::Relaxed);
+            let color = RgbColor::from_name(preset.as_str());
+            let enabled = {
+                let mut cfg = cfg_clone.lock();
+                cfg.bar_color = color;
+                let _ = cfg.save();
+                cfg.bar_enabled
+            };
 
-            let enabled = en_c.load(std::sync::atomic::Ordering::Relaxed);
-            if idx == 0 || !enabled {
-                rgb::turn_lightbar_off();
-            } else {
-                rgb::set_lightbar_color(true, idx);
-            }
+            let mut lc = lc_clone.lock();
+            let apply_color = if enabled { color } else { RgbColor::Off };
+            let _ = lc.set_zone_lighting(RgbZone::RearBar, apply_color, 100);
         });
     }
 
-    // Lightbar Toggle Callback
+    // 7. Lightbar Toggle Callback
     {
-        let idx_c = bar_idx.clone();
-        let en_c = bar_enabled.clone();
+        let lc_clone = lighting_controller.clone();
+        let cfg_clone = config.clone();
 
         main_window.on_toggle_lightbar(move |enabled| {
-            en_c.store(enabled, std::sync::atomic::Ordering::Relaxed);
+            let color = {
+                let mut cfg = cfg_clone.lock();
+                cfg.bar_enabled = enabled;
+                let _ = cfg.save();
+                cfg.bar_color
+            };
 
-            let idx = idx_c.load(std::sync::atomic::Ordering::Relaxed);
-            if enabled && idx > 0 {
-                rgb::set_lightbar_color(true, idx);
-            } else {
-                rgb::turn_lightbar_off();
-            }
+            let mut lc = lc_clone.lock();
+            let apply_color = if enabled { color } else { RgbColor::Off };
+            let _ = lc.set_zone_lighting(RgbZone::RearBar, apply_color, 100);
         });
     }
 
-    // Fan Mode Callback
-    main_window.on_set_fan_mode(|mode| {
-        hardware::set_fan_mode(mode.as_str());
-    });
+    // 8. Fan Mode Callback
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
 
-    // Custom Fan Speed Callback
-    main_window.on_set_custom_fan(|speed| {
-        hardware::set_custom_fan_speed(speed.clamp(30, 100) as u8);
-    });
+        main_window.on_set_fan_mode(move |mode_str| {
+            let mode = match mode_str.as_str() {
+                "Quiet" => FanMode::Quiet,
+                "Gaming" => FanMode::Gaming,
+                "Turbo" => FanMode::Turbo,
+                _ => FanMode::Normal,
+            };
 
-    // Battery Limit Callback
-    main_window.on_toggle_battery_limit(|enabled| {
-        hardware::set_battery_limit(enabled);
-    });
-
-    // Periodic sensor update timer (every 2 seconds)
-    let window_handle = main_window.as_weak();
-    let timer = slint::Timer::default();
-    timer.start(
-        slint::TimerMode::Repeated,
-        std::time::Duration::from_millis(2000),
-        move || {
-            if let Some(window) = window_handle.upgrade() {
-                let (cpu, gpu, rpm) = hardware::read_sensors();
-                window.set_cpu_temp(cpu.into());
-                window.set_gpu_temp(gpu.into());
-                window.set_fan_rpm(rpm.into());
+            {
+                let mut cfg = cfg_clone.lock();
+                cfg.fan_mode = mode;
+                let _ = cfg.save();
             }
-        },
-    );
 
-    // Initial sensor read
-    let (cpu, gpu, rpm) = hardware::read_sensors();
-    main_window.set_cpu_temp(cpu.into());
-    main_window.set_gpu_temp(gpu.into());
-    main_window.set_fan_rpm(rpm.into());
+            let mut tc = tc_clone.lock();
+            let _ = tc.set_fan_mode(mode);
+        });
+    }
+
+    // 9. Custom Fan Speed Callback
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
+
+        main_window.on_set_custom_fan(move |speed| {
+            let clamped = speed.clamp(25, 100) as u8;
+
+            {
+                let mut cfg = cfg_clone.lock();
+                cfg.fan_mode = FanMode::Manual(clamped);
+                cfg.manual_fan_speed = clamped;
+                let _ = cfg.save();
+            }
+
+            let mut tc = tc_clone.lock();
+            let _ = tc.set_custom_fan_speed(clamped);
+        });
+    }
+
+    // 10. Battery Limit Callback
+    {
+        let tc_clone = thermal_controller.clone();
+        let cfg_clone = config.clone();
+
+        main_window.on_toggle_battery_limit(move |enabled| {
+            {
+                let mut cfg = cfg_clone.lock();
+                cfg.battery_limit = enabled;
+                let _ = cfg.save();
+            }
+
+            let mut tc = tc_clone.lock();
+            let _ = tc.set_battery_charge_limit(enabled);
+        });
+    }
+
+    // 11. Periodic Telemetry Update (every 2 seconds)
+    {
+        let tc_clone = thermal_controller.clone();
+        let window_weak = main_window.as_weak();
+        let timer = slint::Timer::default();
+
+        timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_millis(2000),
+            move || {
+                if let Some(window) = window_weak.upgrade() {
+                    let tc = tc_clone.lock();
+                    if let Ok(telemetry) = tc.get_telemetry() {
+                        window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
+                        window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
+                        let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
+                        window.set_fan_rpm(format!("{} RPM", rpm).into());
+                    }
+                }
+            },
+        );
+
+        // Initial Telemetry Read
+        {
+            let tc = thermal_controller.lock();
+            if let Ok(telemetry) = tc.get_telemetry() {
+                main_window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
+                main_window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
+                let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
+                main_window.set_fan_rpm(format!("{} RPM", rpm).into());
+            }
+        }
+    }
 
     main_window.run()
 }

@@ -215,6 +215,9 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 name = "aorus-control"
 version = "0.1.0"
 dependencies = [
+ "parking_lot",
+ "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "windows-sys 0.59.0",

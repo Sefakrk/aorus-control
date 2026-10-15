@@ -1,6 +1,6 @@
 import { Button, Slider, Switch } from "std-widgets.slint";
 
-export component ColorChip inherits TouchArea {
+component ColorChip inherits TouchArea {
     in property <color> chip_color;
     in property <bool> is_selected: false;
     width: 36px;
@@ -17,7 +17,7 @@ export component ColorChip inherits TouchArea {
     }
 }
 
-export component ModeButton inherits TouchArea {
+component ModeButton inherits TouchArea {
     in property <string> title;
     in property <string> icon;
     in property <bool> is_active: false;
@@ -214,7 +214,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Custom fan speed slider with smooth 2-way binding
+                // Custom fan speed slider with smooth 0..100 2-way binding
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
@@ -225,7 +225,7 @@ export component AppWindow inherits Window {
                         width: 80px;
                     }
                     Slider {
-                        minimum: 30;
+                        minimum: 0;
                         maximum: 100;
                         value <=> root.fan_speed;
                     }
@@ -323,7 +323,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Brightness slider with smooth 2-way binding
+                // Brightness slider with smooth 0..100 2-way binding
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
