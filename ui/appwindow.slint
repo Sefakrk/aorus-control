@@ -1,4 +1,4 @@
-import { Button, Switch } from "std-widgets.slint";
+﻿import { Button, Switch } from "std-widgets.slint";
 
 component ColorChip inherits TouchArea {
     in property <color> chip_color;
@@ -21,34 +21,110 @@ component ModeButton inherits TouchArea {
     in property <string> title;
     in property <string> icon;
     in property <bool> is_active: false;
-    height: 44px;
+    height: 52px;
     mouse-cursor: pointer;
 
     Rectangle {
         width: 100%;
         height: 100%;
         border-radius: 10px;
-        background: root.is_active ? #00ffa3.transparentize(85%) : #1a1d26;
+        background: root.is_active ? #00ffa3.transparentize(88%) : #1a1d26;
         border-width: root.is_active ? 2px : 1px;
         border-color: root.is_active ? #00ffa3 : #2b3040;
 
-        HorizontalLayout {
-            padding-left: 8px;
-            padding-right: 8px;
-            spacing: 5px;
+        VerticalLayout {
             alignment: center;
+            spacing: 2px;
 
             Text {
                 text: root.icon;
-                font-size: 14px;
-                vertical-alignment: center;
+                font-size: 15px;
+                horizontal-alignment: center;
             }
             Text {
                 text: root.title;
                 font-size: 12px;
                 font-weight: 700;
                 color: root.is_active ? #00ffa3 : #d1d5db;
-                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
+
+component MuxButton inherits TouchArea {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <string> icon;
+    in property <bool> is_active: false;
+    height: 64px;
+    mouse-cursor: pointer;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 10px;
+        background: root.is_active ? #00ffa3.transparentize(88%) : #1a1d26;
+        border-width: root.is_active ? 2px : 1px;
+        border-color: root.is_active ? #00ffa3 : #2b3040;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.icon;
+                font-size: 16px;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: root.title;
+                font-size: 12px;
+                font-weight: 700;
+                color: root.is_active ? #00ffa3 : #d1d5db;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: root.subtitle;
+                font-size: 10px;
+                color: root.is_active ? #00ffa3aa : #6b7280;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
+
+component NavTab inherits TouchArea {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> is_active: false;
+    height: 50px;
+    mouse-cursor: pointer;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 9px;
+        background: root.is_active ? #141e1a : (parent.has-hover ? #161922 : #00000000);
+        border-width: 1px;
+        border-color: root.is_active ? #00ffa355 : #00000000;
+
+        VerticalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.title;
+                font-size: 13px;
+                font-weight: 700;
+                color: root.is_active ? #00ffa3 : #d1d5db;
+            }
+            Text {
+                text: root.subtitle;
+                font-size: 10px;
+                color: root.is_active ? #00ffa3aa : #6b7280;
             }
         }
     }
@@ -126,13 +202,14 @@ component CustomSlider inherits Rectangle {
 export component AppWindow inherits Window {
     title: "AORUS 16X Control";
     width: 740px;
-    height: 940px;
+    height: 550px;
     background: #0d0f14;
     default-font-family: "Segoe UI";
 
-    in-out property <string> cpu_temp: "-- °C";
+    in-out property <int> active_tab: 0;
+    in-out property <string> cpu_temp: "-- Â°C";
     in-out property <string> cpu_usage: "0%";
-    in-out property <string> gpu_temp: "-- °C";
+    in-out property <string> gpu_temp: "-- Â°C";
     in-out property <string> gpu_usage: "0%";
     in-out property <string> fan1_rpm: "-- RPM";
     in-out property <string> fan2_rpm: "-- RPM";
@@ -145,7 +222,7 @@ export component AppWindow inherits Window {
     in-out property <string> active_mode: "Normal";
     in-out property <string> active_gpu_mode: "Hybrid";
     in-out property <bool> dgpu_killed: false;
-    in-out property <string> dgpu_notice: "ℹ️ dGPU kapatıldığında ekranda 1-2 sn kırpışma olur. Yeniden başlatma gerekmez.";
+    in-out property <string> dgpu_notice: "â„¹ï¸ dGPU kapatÄ±ldÄ±ÄŸÄ±nda ekranda 1-2 sn kÄ±rpÄ±ÅŸma olur. Yeniden baÅŸlatma gerekmez.";
     in-out property <string> active_kb_color: "Blue";
     in-out property <string> active_bar_color: "Blue";
     in-out property <bool> lightbar_enabled: true;
@@ -164,555 +241,672 @@ export component AppWindow inherits Window {
     callback toggle_battery_limit(bool);
 
     VerticalLayout {
-        padding: 20px;
-        spacing: 12px;
+        padding: 0px;
+        spacing: 0px;
 
-        // Header with live sensors (CPU % / GPU % / FAN 1 / FAN 2)
-        HorizontalLayout {
-            alignment: space-between;
-
-            VerticalLayout {
-                spacing: 2px;
-                Text {
-                    text: "AORUS 16X";
-                    font-size: 20px;
-                    font-weight: 800;
-                    color: #ffffff;
-                }
-                Text {
-                    text: "Native Hardware & RGB Control";
-                    font-size: 11px;
-                    color: #6b7280;
-                }
-            }
-
-            // 4 Live sensor badges
-            HorizontalLayout {
-                spacing: 6px;
-
-                Rectangle {
-                    height: 38px;
-                    background: #161922;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: #262c3d;
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 4px;
-                        Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.cpu_temp; font-size: 12px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
-                        Text { text: "(" + root.cpu_usage + ")"; font-size: 10px; color: #6ee7b7; vertical-alignment: center; }
-                    }
-                }
-
-                Rectangle {
-                    height: 38px;
-                    background: #161922;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: #262c3d;
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 4px;
-                        Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.gpu_temp; font-size: 12px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
-                        Text { text: "(" + root.gpu_usage + ")"; font-size: 10px; color: #7dd3fc; vertical-alignment: center; }
-                    }
-                }
-
-                Rectangle {
-                    height: 38px;
-                    background: #161922;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: #262c3d;
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 4px;
-                        Text { text: "FAN 1"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
-                    }
-                }
-
-                Rectangle {
-                    height: 38px;
-                    background: #161922;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: #262c3d;
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 4px;
-                        Text { text: "FAN 2"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
-                        Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
-                    }
-                }
-            }
-        }
-
-        // Section 1: Fan & Power Profile
+        // 1. TOPBAR: Fixed on all tabs
         Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
+            height: 58px;
+            background: #0d0f14;
 
-            VerticalLayout {
-                padding: 12px;
-                spacing: 10px;
-
-                Text {
-                    text: "FAN & POWER MODES";
-                    font-size: 11px;
-                    font-weight: 800;
-                    color: #9ca3af;
-                    letter-spacing: 1px;
-                }
-
-                HorizontalLayout {
-                    spacing: 8px;
-
-                    ModeButton {
-                        title: "Quiet";
-                        icon: "🍃";
-                        is_active: root.active_mode == "Quiet";
-                        clicked => {
-                            root.active_mode = "Quiet";
-                            root.set_fan_mode("Quiet");
-                        }
-                    }
-                    ModeButton {
-                        title: "Normal";
-                        icon: "⚡";
-                        is_active: root.active_mode == "Normal";
-                        clicked => {
-                            root.active_mode = "Normal";
-                            root.set_fan_mode("Normal");
-                        }
-                    }
-                    ModeButton {
-                        title: "Gaming";
-                        icon: "🎮";
-                        is_active: root.active_mode == "Gaming";
-                        clicked => {
-                            root.active_mode = "Gaming";
-                            root.set_fan_mode("Gaming");
-                        }
-                    }
-                    ModeButton {
-                        title: "Turbo";
-                        icon: "🚀";
-                        is_active: root.active_mode == "Turbo";
-                        clicked => {
-                            root.active_mode = "Turbo";
-                            root.set_fan_mode("Turbo");
-                        }
-                    }
-                    ModeButton {
-                        title: "Custom";
-                        icon: "🛠️";
-                        is_active: root.active_mode == "Custom";
-                        clicked => {
-                            root.active_mode = "Custom";
-                            root.set_fan_mode("Custom");
-                        }
-                    }
-                }
+            // Bottom border line
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                width: 100%;
+                background: #212635;
             }
-        }
-
-        // Section 2: Custom Fan Curve Step Matrix
-        Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
-
-            VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
-
-                HorizontalLayout {
-                    alignment: space-between;
-                    Text {
-                        text: "📊  ÖZEL FAN EĞRİSİ (SICAKLIK BASAMAKLARI)";
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: #f59e0b;
-                        letter-spacing: 1px;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: root.active_mode == "Custom" ? "AKTİF KULLANILIYOR" : "Custom modunda devreye girer";
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: root.active_mode == "Custom" ? #00ffa3 : #6b7280;
-                        vertical-alignment: center;
-                    }
-                }
-
-                // Row 1: 50°C
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: "50 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
-                    CustomSlider {
-                        value: root.curve_50;
-                        changed(v) => { root.curve_50 = v; root.set_curve_point(0, Math.round(v)); }
-                        released(v) => { root.save_curve(); }
-                    }
-                    Text { text: "\{Math.round(root.curve_50)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
-                }
-
-                // Row 2: 60°C
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: "60 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
-                    CustomSlider {
-                        value: root.curve_60;
-                        changed(v) => { root.curve_60 = v; root.set_curve_point(1, Math.round(v)); }
-                        released(v) => { root.save_curve(); }
-                    }
-                    Text { text: "\{Math.round(root.curve_60)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
-                }
-
-                // Row 3: 70°C
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: "70 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
-                    CustomSlider {
-                        value: root.curve_70;
-                        changed(v) => { root.curve_70 = v; root.set_curve_point(2, Math.round(v)); }
-                        released(v) => { root.save_curve(); }
-                    }
-                    Text { text: "\{Math.round(root.curve_70)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
-                }
-
-                // Row 4: 80°C
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: "80 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
-                    CustomSlider {
-                        value: root.curve_80;
-                        changed(v) => { root.curve_80 = v; root.set_curve_point(3, Math.round(v)); }
-                        released(v) => { root.save_curve(); }
-                    }
-                    Text { text: "\{Math.round(root.curve_80)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
-                }
-
-                // Row 5: 90°C
-                HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: "90 °C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
-                    CustomSlider {
-                        value: root.curve_90;
-                        changed(v) => { root.curve_90 = v; root.set_curve_point(4, Math.round(v)); }
-                        released(v) => { root.save_curve(); }
-                    }
-                    Text { text: "\{Math.round(root.curve_90)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
-                }
-            }
-        }
-
-        // Section 3: MUX Switch & dGPU Kill-Switch
-        Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
-
-            VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
-
-                HorizontalLayout {
-                    alignment: space-between;
-                    Text {
-                        text: "🎮  GPU ÇALIŞMA MODU & D-GPU KILL-SWITCH";
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: #c084fc;
-                        letter-spacing: 1px;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: root.dgpu_killed ? "dGPU: KAPALI (Maks Pil)" : ("Aktif Donanım: " + root.active_gpu_mode);
-                        font-size: 11px;
-                        font-weight: 700;
-                        color: root.dgpu_killed ? #ec4899 : (root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8);
-                        vertical-alignment: center;
-                    }
-                }
-
-                HorizontalLayout {
-                    spacing: 8px;
-
-                    ModeButton {
-                        title: "Hybrid (Optimus)";
-                        icon: "🔋";
-                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Hybrid";
-                        clicked => {
-                            root.set_gpu_mode("Hybrid");
-                        }
-                    }
-
-                    ModeButton {
-                        title: "Discrete (dGPU)";
-                        icon: "⚡";
-                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Discrete";
-                        clicked => {
-                            root.set_gpu_mode("Discrete");
-                        }
-                    }
-
-                    ModeButton {
-                        title: "dGPU Kapalı (Maks Pil)";
-                        icon: "🚫";
-                        is_active: root.dgpu_killed;
-                        clicked => {
-                            root.toggle_dgpu_kill();
-                        }
-                    }
-                }
-
-                Text {
-                    text: root.dgpu_notice;
-                    font-size: 10px;
-                    color: #f59e0b;
-                    wrap: word-wrap;
-                }
-            }
-        }
-
-        // Section 4: Keyboard Static RGB
-        Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
-
-            VerticalLayout {
-                padding: 12px;
-                spacing: 10px;
-
-                HorizontalLayout {
-                    alignment: space-between;
-                    Text {
-                        text: "⌨️  KEYBOARD RGB (SOLID STATIC)";
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: #00ffa3;
-                        letter-spacing: 1px;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: "Current: " + root.active_kb_color;
-                        font-size: 11px;
-                        color: #6b7280;
-                        vertical-alignment: center;
-                    }
-                }
-
-                // Color Presets for Keyboard
-                HorizontalLayout {
-                    spacing: 10px;
-
-                    ColorChip {
-                        chip_color: #00a2ff;
-                        is_selected: root.active_kb_color == "Blue";
-                        clicked => { root.active_kb_color = "Blue"; root.set_keyboard_color("Blue"); }
-                    }
-                    ColorChip {
-                        chip_color: #ff1a40;
-                        is_selected: root.active_kb_color == "Red";
-                        clicked => { root.active_kb_color = "Red"; root.set_keyboard_color("Red"); }
-                    }
-                    ColorChip {
-                        chip_color: #10b981;
-                        is_selected: root.active_kb_color == "Green";
-                        clicked => { root.active_kb_color = "Green"; root.set_keyboard_color("Green"); }
-                    }
-                    ColorChip {
-                        chip_color: #eab308;
-                        is_selected: root.active_kb_color == "Yellow";
-                        clicked => { root.active_kb_color = "Yellow"; root.set_keyboard_color("Yellow"); }
-                    }
-                    ColorChip {
-                        chip_color: #a855f7;
-                        is_selected: root.active_kb_color == "Purple";
-                        clicked => { root.active_kb_color = "Purple"; root.set_keyboard_color("Purple"); }
-                    }
-                    ColorChip {
-                        chip_color: #f97316;
-                        is_selected: root.active_kb_color == "Orange";
-                        clicked => { root.active_kb_color = "Orange"; root.set_keyboard_color("Orange"); }
-                    }
-                    ColorChip {
-                        chip_color: #f3f4f6;
-                        is_selected: root.active_kb_color == "White";
-                        clicked => { root.active_kb_color = "White"; root.set_keyboard_color("White"); }
-                    }
-                    ColorChip {
-                        chip_color: #111317;
-                        is_selected: root.active_kb_color == "Off";
-                        clicked => { root.active_kb_color = "Off"; root.set_keyboard_color("Off"); }
-                    }
-                }
-
-                // Brightness slider
-                HorizontalLayout {
-                    spacing: 12px;
-                    Text {
-                        text: "Brightness:";
-                        font-size: 12px;
-                        color: #9ca3af;
-                        vertical-alignment: center;
-                        width: 75px;
-                    }
-                    CustomSlider {
-                        minimum: 0;
-                        maximum: 100;
-                        value: root.kb_brightness;
-                        changed(v) => {
-                            root.kb_brightness = v;
-                            root.set_keyboard_brightness(v);
-                        }
-                        released(v) => {
-                            root.save_keyboard_brightness(v);
-                        }
-                    }
-                    Text {
-                        text: "\{Math.round(root.kb_brightness)}%";
-                        font-size: 12px;
-                        font-weight: 700;
-                        color: #ffffff;
-                        vertical-alignment: center;
-                        width: 38px;
-                    }
-                }
-            }
-        }
-
-        // Section 5: Rear LightBar (Beacon)
-        Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
-
-            VerticalLayout {
-                padding: 12px;
-                spacing: 10px;
-
-                HorizontalLayout {
-                    alignment: space-between;
-                    Text {
-                        text: "✨  REAR LIGHTBAR (AORUS BEACON)";
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: #38bdf8;
-                        letter-spacing: 1px;
-                        vertical-alignment: center;
-                    }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Text { text: "Power:"; font-size: 12px; color: #9ca3af; vertical-alignment: center; }
-                        Switch {
-                            checked: root.lightbar_enabled;
-                            toggled => {
-                                root.lightbar_enabled = self.checked;
-                                root.toggle_lightbar(self.checked);
-                            }
-                        }
-                    }
-                }
-
-                // Color Presets for LightBar
-                HorizontalLayout {
-                    spacing: 10px;
-
-                    ColorChip {
-                        chip_color: #00a2ff;
-                        is_selected: root.active_bar_color == "Blue";
-                        clicked => { root.active_bar_color = "Blue"; root.set_lightbar_color("Blue"); }
-                    }
-                    ColorChip {
-                        chip_color: #ff1a40;
-                        is_selected: root.active_bar_color == "Red";
-                        clicked => { root.active_bar_color = "Red"; root.set_lightbar_color("Red"); }
-                    }
-                    ColorChip {
-                        chip_color: #10b981;
-                        is_selected: root.active_bar_color == "Green";
-                        clicked => { root.active_bar_color = "Green"; root.set_lightbar_color("Green"); }
-                    }
-                    ColorChip {
-                        chip_color: #eab308;
-                        is_selected: root.active_bar_color == "Yellow";
-                        clicked => { root.active_bar_color = "Yellow"; root.set_lightbar_color("Yellow"); }
-                    }
-                    ColorChip {
-                        chip_color: #a855f7;
-                        is_selected: root.active_bar_color == "Purple";
-                        clicked => { root.active_bar_color = "Purple"; root.set_lightbar_color("Purple"); }
-                    }
-                    ColorChip {
-                        chip_color: #f97316;
-                        is_selected: root.active_bar_color == "Orange";
-                        clicked => { root.active_bar_color = "Orange"; root.set_lightbar_color("Orange"); }
-                    }
-                    ColorChip {
-                        chip_color: #f3f4f6;
-                        is_selected: root.active_bar_color == "White";
-                        clicked => { root.active_bar_color = "White"; root.set_lightbar_color("White"); }
-                    }
-                    ColorChip {
-                        chip_color: #111317;
-                        is_selected: root.active_bar_color == "Off";
-                        clicked => { root.active_bar_color = "Off"; root.set_lightbar_color("Off"); }
-                    }
-                }
-            }
-        }
-
-        // Section 6: Battery Health Care
-        Rectangle {
-            background: #141720;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: #212635;
 
             HorizontalLayout {
-                padding: 12px;
+                padding-left: 18px;
+                padding-right: 18px;
                 alignment: space-between;
 
                 VerticalLayout {
-                    spacing: 2px;
+                    alignment: center;
+                    spacing: 1px;
                     Text {
-                        text: "BATTERY HEALTH CARE";
-                        font-size: 11px;
+                        text: "AORUS 16X";
+                        font-size: 17px;
                         font-weight: 800;
-                        color: #9ca3af;
-                        letter-spacing: 1px;
+                        color: #ffffff;
+                        letter-spacing: 0.5px;
                     }
                     Text {
-                        text: "Limit maximum charge to 80% to extend battery lifespan";
+                        text: "Native Hardware & RGB Control";
                         font-size: 11px;
                         color: #6b7280;
                     }
                 }
 
-                Switch {
-                    checked: root.battery_limit;
-                    toggled => {
-                        root.battery_limit = self.checked;
-                        root.toggle_battery_limit(self.checked);
+                // 4 Sensor Badges
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 6px;
+
+                    Rectangle {
+                        height: 34px;
+                        background: #161922;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #262c3d;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            Text { text: "CPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: root.cpu_temp; font-size: 12px; font-weight: 700; color: #00ffa3; vertical-alignment: center; }
+                            Text { text: "(" + root.cpu_usage + ")"; font-size: 10px; color: #6ee7b7; vertical-alignment: center; }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 34px;
+                        background: #161922;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #262c3d;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            Text { text: "GPU"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: root.gpu_temp; font-size: 12px; font-weight: 700; color: #38bdf8; vertical-alignment: center; }
+                            Text { text: "(" + root.gpu_usage + ")"; font-size: 10px; color: #7dd3fc; vertical-alignment: center; }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 34px;
+                        background: #161922;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #262c3d;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            Text { text: "FAN 1"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: root.fan1_rpm; font-size: 12px; font-weight: 700; color: #f59e0b; vertical-alignment: center; }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 34px;
+                        background: #161922;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #262c3d;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            Text { text: "FAN 2"; font-size: 11px; color: #9ca3af; vertical-alignment: center; }
+                            Text { text: root.fan2_rpm; font-size: 12px; font-weight: 700; color: #ec4899; vertical-alignment: center; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. MAIN BODY: Sidebar + Content Area
+        HorizontalLayout {
+            padding: 0px;
+            spacing: 0px;
+
+            // LEFT SIDEBAR (5 Tabs)
+            Rectangle {
+                width: 172px;
+                background: #0d0f14;
+
+                // Right border line
+                Rectangle {
+                    x: parent.width - 1px;
+                    width: 1px;
+                    height: 100%;
+                    background: #212635;
+                }
+
+                VerticalLayout {
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
+                    alignment: start;
+
+                    NavTab {
+                        title: "ðŸŒ€ Fan & GÃ¼Ã§";
+                        subtitle: "mod + eÄŸri";
+                        is_active: root.active_tab == 0;
+                        clicked => { root.active_tab = 0; }
+                    }
+                    NavTab {
+                        title: "ðŸŽ® GPU / MUX";
+                        subtitle: "hybrid Â· dgpu Â· kill";
+                        is_active: root.active_tab == 1;
+                        clicked => { root.active_tab = 1; }
+                    }
+                    NavTab {
+                        title: "âŒ¨ï¸ Klavye";
+                        subtitle: "rgb + parlaklÄ±k";
+                        is_active: root.active_tab == 2;
+                        clicked => { root.active_tab = 2; }
+                    }
+                    NavTab {
+                        title: "âœ¨ Arka IÅŸÄ±k";
+                        subtitle: "beacon + gÃ¼Ã§";
+                        is_active: root.active_tab == 3;
+                        clicked => { root.active_tab = 3; }
+                    }
+                    NavTab {
+                        title: "ðŸ”‹ Pil";
+                        subtitle: "%80 limit";
+                        is_active: root.active_tab == 4;
+                        clicked => { root.active_tab = 4; }
+                    }
+                }
+            }
+
+            // RIGHT CONTENT PANE
+            Rectangle {
+                horizontal-stretch: 1;
+                background: #0d0f14;
+
+                VerticalLayout {
+                    padding-top: 14px;
+                    padding-bottom: 14px;
+                    padding-left: 18px;
+                    padding-right: 18px;
+                    spacing: 12px;
+                    alignment: start;
+
+                    // TAB 0: FAN & GÃœÃ‡
+                    if root.active_tab == 0 : VerticalLayout {
+                        spacing: 10px;
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 12px;
+                                spacing: 8px;
+
+                                Text {
+                                    text: "FAN & POWER MODES";
+                                    font-size: 11px;
+                                    font-weight: 800;
+                                    color: #9ca3af;
+                                    letter-spacing: 1px;
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    ModeButton {
+                                        title: "Quiet";
+                                        icon: "ðŸƒ";
+                                        is_active: root.active_mode == "Quiet";
+                                        clicked => {
+                                            root.active_mode = "Quiet";
+                                            root.set_fan_mode("Quiet");
+                                        }
+                                    }
+                                    ModeButton {
+                                        title: "Normal";
+                                        icon: "âš¡";
+                                        is_active: root.active_mode == "Normal";
+                                        clicked => {
+                                            root.active_mode = "Normal";
+                                            root.set_fan_mode("Normal");
+                                        }
+                                    }
+                                    ModeButton {
+                                        title: "Gaming";
+                                        icon: "ðŸŽ®";
+                                        is_active: root.active_mode == "Gaming";
+                                        clicked => {
+                                            root.active_mode = "Gaming";
+                                            root.set_fan_mode("Gaming");
+                                        }
+                                    }
+                                    ModeButton {
+                                        title: "Turbo";
+                                        icon: "ðŸš€";
+                                        is_active: root.active_mode == "Turbo";
+                                        clicked => {
+                                            root.active_mode = "Turbo";
+                                            root.set_fan_mode("Turbo");
+                                        }
+                                    }
+                                    ModeButton {
+                                        title: "Custom";
+                                        icon: "ðŸ› ï¸";
+                                        is_active: root.active_mode == "Custom";
+                                        clicked => {
+                                            root.active_mode = "Custom";
+                                            root.set_fan_mode("Custom");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 12px;
+                                spacing: 7px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    Text {
+                                        text: "ðŸ“Š  Ã–ZEL FAN EÄžRÄ°SÄ° (SICAKLIK BASAMAKLARI)";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #f59e0b;
+                                        letter-spacing: 1px;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: root.active_mode == "Custom" ? "AKTÄ°F KULLANILIYOR" : "Custom modunda devreye girer";
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: root.active_mode == "Custom" ? #00ffa3 : #6b7280;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Text { text: "50 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    CustomSlider {
+                                        value: root.curve_50;
+                                        changed(v) => { root.curve_50 = v; root.set_curve_point(0, Math.round(v)); }
+                                        released(v) => { root.save_curve(); }
+                                    }
+                                    Text { text: "\{Math.round(root.curve_50)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Text { text: "60 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    CustomSlider {
+                                        value: root.curve_60;
+                                        changed(v) => { root.curve_60 = v; root.set_curve_point(1, Math.round(v)); }
+                                        released(v) => { root.save_curve(); }
+                                    }
+                                    Text { text: "\{Math.round(root.curve_60)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Text { text: "70 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    CustomSlider {
+                                        value: root.curve_70;
+                                        changed(v) => { root.curve_70 = v; root.set_curve_point(2, Math.round(v)); }
+                                        released(v) => { root.save_curve(); }
+                                    }
+                                    Text { text: "\{Math.round(root.curve_70)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Text { text: "80 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    CustomSlider {
+                                        value: root.curve_80;
+                                        changed(v) => { root.curve_80 = v; root.set_curve_point(3, Math.round(v)); }
+                                        released(v) => { root.save_curve(); }
+                                    }
+                                    Text { text: "\{Math.round(root.curve_80)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    Text { text: "90 Â°C"; font-size: 12px; font-weight: 700; color: #9ca3af; width: 45px; vertical-alignment: center; }
+                                    CustomSlider {
+                                        value: root.curve_90;
+                                        changed(v) => { root.curve_90 = v; root.set_curve_point(4, Math.round(v)); }
+                                        released(v) => { root.save_curve(); }
+                                    }
+                                    Text { text: "\{Math.round(root.curve_90)}%"; font-size: 12px; font-weight: 700; color: #ffffff; width: 40px; vertical-alignment: center; }
+                                }
+                            }
+                        }
+                    }
+
+                    // TAB 1: GPU / MUX
+                    if root.active_tab == 1 : VerticalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    Text {
+                                        text: "ðŸŽ®  GPU Ã‡ALIÅžMA MODU & D-GPU KILL-SWITCH";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #c084fc;
+                                        letter-spacing: 1px;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: root.dgpu_killed ? "dGPU: KAPALI (Maks Pil)" : ("Aktif DonanÄ±m: " + root.active_gpu_mode);
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: root.dgpu_killed ? #ec4899 : (root.active_gpu_mode == "Discrete" ? #00ffa3 : #38bdf8);
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+
+                                    MuxButton {
+                                        title: "Hybrid (Optimus)";
+                                        subtitle: "pil tasarrufu";
+                                        icon: "ðŸ”‹";
+                                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Hybrid";
+                                        clicked => {
+                                            root.set_gpu_mode("Hybrid");
+                                        }
+                                    }
+
+                                    MuxButton {
+                                        title: "Discrete (dGPU)";
+                                        subtitle: "maksimum fps";
+                                        icon: "âš¡";
+                                        is_active: !root.dgpu_killed && root.active_gpu_mode == "Discrete";
+                                        clicked => {
+                                            root.set_gpu_mode("Discrete");
+                                        }
+                                    }
+
+                                    MuxButton {
+                                        title: "dGPU KapalÄ±";
+                                        subtitle: "maks pil modu";
+                                        icon: "ðŸš«";
+                                        is_active: root.dgpu_killed;
+                                        clicked => {
+                                            root.toggle_dgpu_kill();
+                                        }
+                                    }
+                                }
+
+                                Rectangle { background: #161922; border-radius: 8px; HorizontalLayout { padding: 10px; Text {
+                                        text: root.dgpu_notice;
+                                        font-size: 11px;
+                                        color: #f59e0b;
+                                        wrap: word-wrap; } } }
+                            }
+                        }
+                    }
+
+                    // TAB 2: KLAVYE
+                    if root.active_tab == 2 : VerticalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    Text {
+                                        text: "âŒ¨ï¸  KEYBOARD RGB (SOLID STATIC)";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #00ffa3;
+                                        letter-spacing: 1px;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: "SeÃ§ili: " + root.active_kb_color;
+                                        font-size: 11px;
+                                        color: #6b7280;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+
+                                    ColorChip {
+                                        chip_color: #00a2ff;
+                                        is_selected: root.active_kb_color == "Blue";
+                                        clicked => { root.active_kb_color = "Blue"; root.set_keyboard_color("Blue"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #ff1a40;
+                                        is_selected: root.active_kb_color == "Red";
+                                        clicked => { root.active_kb_color = "Red"; root.set_keyboard_color("Red"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #10b981;
+                                        is_selected: root.active_kb_color == "Green";
+                                        clicked => { root.active_kb_color = "Green"; root.set_keyboard_color("Green"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #eab308;
+                                        is_selected: root.active_kb_color == "Yellow";
+                                        clicked => { root.active_kb_color = "Yellow"; root.set_keyboard_color("Yellow"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #a855f7;
+                                        is_selected: root.active_kb_color == "Purple";
+                                        clicked => { root.active_kb_color = "Purple"; root.set_keyboard_color("Purple"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #f97316;
+                                        is_selected: root.active_kb_color == "Orange";
+                                        clicked => { root.active_kb_color = "Orange"; root.set_keyboard_color("Orange"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #f3f4f6;
+                                        is_selected: root.active_kb_color == "White";
+                                        clicked => { root.active_kb_color = "White"; root.set_keyboard_color("White"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #111317;
+                                        is_selected: root.active_kb_color == "Off";
+                                        clicked => { root.active_kb_color = "Off"; root.set_keyboard_color("Off"); }
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    Text {
+                                        text: "ParlaklÄ±k:";
+                                        font-size: 12px;
+                                        color: #9ca3af;
+                                        vertical-alignment: center;
+                                        width: 75px;
+                                    }
+                                    CustomSlider {
+                                        minimum: 0;
+                                        maximum: 100;
+                                        value: root.kb_brightness;
+                                        changed(v) => {
+                                            root.kb_brightness = v;
+                                            root.set_keyboard_brightness(v);
+                                        }
+                                        released(v) => {
+                                            root.save_keyboard_brightness(v);
+                                        }
+                                    }
+                                    Text {
+                                        text: "\{Math.round(root.kb_brightness)}%";
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        color: #ffffff;
+                                        vertical-alignment: center;
+                                        width: 38px;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // TAB 3: ARKA IÅžIK
+                    if root.active_tab == 3 : VerticalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    Text {
+                                        text: "âœ¨  REAR LIGHTBAR (AORUS BEACON)";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #38bdf8;
+                                        letter-spacing: 1px;
+                                        vertical-alignment: center;
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Text { text: "GÃ¼Ã§:"; font-size: 12px; color: #9ca3af; vertical-alignment: center; }
+                                        Switch {
+                                            checked: root.lightbar_enabled;
+                                            toggled => {
+                                                root.lightbar_enabled = self.checked;
+                                                root.toggle_lightbar(self.checked);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+
+                                    ColorChip {
+                                        chip_color: #00a2ff;
+                                        is_selected: root.active_bar_color == "Blue";
+                                        clicked => { root.active_bar_color = "Blue"; root.set_lightbar_color("Blue"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #ff1a40;
+                                        is_selected: root.active_bar_color == "Red";
+                                        clicked => { root.active_bar_color = "Red"; root.set_lightbar_color("Red"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #10b981;
+                                        is_selected: root.active_bar_color == "Green";
+                                        clicked => { root.active_bar_color = "Green"; root.set_lightbar_color("Green"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #eab308;
+                                        is_selected: root.active_bar_color == "Yellow";
+                                        clicked => { root.active_bar_color = "Yellow"; root.set_lightbar_color("Yellow"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #a855f7;
+                                        is_selected: root.active_bar_color == "Purple";
+                                        clicked => { root.active_bar_color = "Purple"; root.set_lightbar_color("Purple"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #f97316;
+                                        is_selected: root.active_bar_color == "Orange";
+                                        clicked => { root.active_bar_color = "Orange"; root.set_lightbar_color("Orange"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #f3f4f6;
+                                        is_selected: root.active_bar_color == "White";
+                                        clicked => { root.active_bar_color = "White"; root.set_lightbar_color("White"); }
+                                    }
+                                    ColorChip {
+                                        chip_color: #111317;
+                                        is_selected: root.active_bar_color == "Off";
+                                        clicked => { root.active_bar_color = "Off"; root.set_lightbar_color("Off"); }
+                                    }
+                                }
+
+                                Text {
+                                    text: "â„¹ï¸ Ana bar, egzoz ÅŸeridi ve Aorus Beacon projeksiyonu senkronize tek renk olarak sÃ¼rÃ¼lÃ¼r.";
+                                    font-size: 11px;
+                                    color: #6b7280;
+                                }
+                            }
+                        }
+                    }
+
+                    // TAB 4: PÄ°L
+                    if root.active_tab == 4 : VerticalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            background: #141720;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #212635;
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    VerticalLayout {
+                                        spacing: 3px;
+                                        Text {
+                                            text: "ðŸ”‹  BATTERY HEALTH CARE";
+                                            font-size: 11px;
+                                            font-weight: 800;
+                                            color: #7dd3fc;
+                                            letter-spacing: 1px;
+                                        }
+                                        Text {
+                                            text: "Prizde kullanÄ±rken ÅŸarjÄ± %80'de keserek pil Ã¶mrÃ¼nÃ¼ uzatÄ±r.";
+                                            font-size: 12px;
+                                            color: #6b7280;
+                                        }
+                                    }
+
+                                    Switch {
+                                        checked: root.battery_limit;
+                                        toggled => {
+                                            root.battery_limit = self.checked;
+                                            root.toggle_battery_limit(self.checked);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
