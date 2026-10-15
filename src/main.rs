@@ -266,7 +266,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 12. MUX Switch Callback
+    // 12. MUX Switch Callback (Fixed regression: updates active_gpu_mode immediately)
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
@@ -294,26 +294,40 @@ fn main() -> Result<(), slint::PlatformError> {
                 let mut tc = tc_clone.lock();
                 let _ = tc.set_gpu_mode(mode);
             }
+
+            // Update UI property so button highlight updates immediately!
+            if let Some(w) = window_weak.upgrade() {
+                w.set_active_gpu_mode(mode.to_name().into());
+                w.set_dgpu_notice("⚠️ MUX modu değiştirildi. Donanım seviyesinde etkili olması için sistemi yeniden başlatın.".into());
+            }
         });
     }
 
-    // 13. dGPU Kill-Switch Callback (with safety lock)
+    // 13. dGPU Kill-Switch Callback (with pending-reboot & hardware safety lock)
     {
         let tc_clone = thermal_controller.clone();
         let cfg_clone = config.clone();
         let window_weak = main_window.as_weak();
 
         main_window.on_toggle_dgpu_kill(move || {
-            let (current_gpu_mode, is_killed) = {
+            // Check real physical hardware MUX mode
+            let real_hw_mode = {
+                let tc = tc_clone.lock();
+                tc.get_gpu_mode().unwrap_or(GpuMode::Discrete)
+            };
+
+            let (cfg_mode, is_killed) = {
                 let cfg = cfg_clone.lock();
                 (cfg.gpu_mode, cfg.dgpu_killed)
             };
 
-            // SAFETY LOCK: Cannot kill dGPU in Discrete mode (black screen prevention!)
-            if current_gpu_mode == GpuMode::Discrete {
+            // PENDING REBOOT / DISCRETE PROTECTION:
+            // If physical hardware is Discrete, OR config is Discrete:
+            // Siyah ekran riski var! Kapatılamaz!
+            if real_hw_mode == GpuMode::Discrete || cfg_mode == GpuMode::Discrete {
                 if let Some(w) = window_weak.upgrade() {
                     w.set_active_gpu_mode("Hybrid".into());
-                    w.set_dgpu_notice("⚠️ Discrete moddayken dGPU kapatılamaz (siyah ekran riski)! MUX Hybrid moda alındı, lütfen önce sistemi yeniden başlatın.".into());
+                    w.set_dgpu_notice("⚠️ Donanım Discrete modda (siyah ekran riski)! MUX Hybrid moda alındı, dGPU kapatılmadan önce MUTLAKA bilgisayar yeniden başlatılmalıdır.".into());
                 }
 
                 let mut tc = tc_clone.lock();
@@ -324,10 +338,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 return;
             }
 
-            // In Hybrid mode: safely toggle dGPU state
+            // In confirmed pure Hybrid mode: toggle dGPU state safely
             let mut tc = tc_clone.lock();
             if is_killed {
-                // Re-enable dGPU
                 let _ = tc.set_dgpu_enabled(true);
                 if let Some(w) = window_weak.upgrade() {
                     w.set_dgpu_killed(false);
@@ -337,7 +350,6 @@ fn main() -> Result<(), slint::PlatformError> {
                 cfg.dgpu_killed = false;
                 let _ = cfg.save();
             } else {
-                // Kill dGPU for maximum battery conservation
                 let _ = tc.set_dgpu_enabled(false);
                 if let Some(w) = window_weak.upgrade() {
                     w.set_dgpu_killed(true);

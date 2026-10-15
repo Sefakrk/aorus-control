@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::hal::models::{FanMode, GpuMode, RgbColor};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub fan_mode: FanMode,
     pub custom_curve: [u8; 5],

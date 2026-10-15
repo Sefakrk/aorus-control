@@ -348,8 +348,10 @@ impl ThermalController for WindowsThermalController {
             if ($dev) {
                 if ($dev.Status -eq 'OK') {
                     Write-Output 'OK'
-                } else {
+                } elseif ($dev.Status -eq 'Error' -or $dev.Status -eq 'Degraded' -or $dev.Problem -eq 22 -or $dev.ConfigManagerErrorCode -eq 22) {
                     Write-Output 'DISABLED'
+                } else {
+                    Write-Output 'OK'
                 }
             }
         "#;
