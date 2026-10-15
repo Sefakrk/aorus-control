@@ -55,16 +55,18 @@ component ModeButton inherits TouchArea {
 }
 
 component CustomSlider inherits Rectangle {
-    in-out property <float> value: 0;
+    in property <float> value: 0;
     in property <float> minimum: 0;
     in property <float> maximum: 100;
-    callback changed(int);
-    callback released(int);
+    callback changed(float);
+    callback released(float);
 
-    height: 26px;
+    height: 28px;
+    min-width: 200px;
     horizontal-stretch: 1;
 
-    // Track background
+    property <float> ratio: Math.clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0.0, 1.0);
+
     Rectangle {
         y: (parent.height - self.height) / 2;
         height: 6px;
@@ -72,20 +74,18 @@ component CustomSlider inherits Rectangle {
         border-radius: 3px;
         background: #232733;
 
-        // Active track fill
         Rectangle {
             x: 0;
             y: 0;
             height: 100%;
-            width: Math.clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0.0, 1.0) * parent.width;
+            width: root.ratio * parent.width;
             border-radius: 3px;
             background: #00ffa3;
         }
     }
 
-    // Handle (Visual only, no internal TouchArea)
     Rectangle {
-        x: Math.clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0.0, 1.0) * (parent.width - self.width);
+        x: root.ratio * (parent.width - self.width);
         y: (parent.height - self.height) / 2;
         width: 16px;
         height: 16px;
@@ -101,22 +101,20 @@ component CustomSlider inherits Rectangle {
         mouse-cursor: pointer;
 
         moved => {
-            if (self.pressed) {
-                let ratio = Math.clamp(self.mouse-x / self.width, 0.0, 1.0);
-                let new_val = Math.round(root.minimum + ratio * (root.maximum - root.minimum));
-                if (new_val != Math.round(root.value)) {
-                    root.value = new_val;
-                    root.changed(new_val);
+            if (self.pressed && root.width > 0px) {
+                let r = Math.clamp(self.mouse-x / root.width, 0.0, 1.0);
+                let v = Math.round(root.minimum + r * (root.maximum - root.minimum));
+                if (v != Math.round(root.value)) {
+                    root.changed(v);
                 }
             }
         }
 
         pointer-event(ev) => {
-            if (ev.kind == PointerEventKind.down) {
-                let ratio = Math.clamp(self.mouse-x / self.width, 0.0, 1.0);
-                let new_val = Math.round(root.minimum + ratio * (root.maximum - root.minimum));
-                root.value = new_val;
-                root.changed(new_val);
+            if (ev.kind == PointerEventKind.down && root.width > 0px) {
+                let r = Math.clamp(self.mouse-x / root.width, 0.0, 1.0);
+                let v = Math.round(root.minimum + r * (root.maximum - root.minimum));
+                root.changed(v);
             }
             if (ev.kind == PointerEventKind.up) {
                 root.released(Math.round(root.value));
@@ -146,8 +144,8 @@ export component AppWindow inherits Window {
     callback set_fan_mode(string);
     callback set_custom_fan(int);
     callback set_keyboard_color(string);
-    callback set_keyboard_brightness(int);
-    callback save_keyboard_brightness(int);
+    callback set_keyboard_brightness(float);
+    callback save_keyboard_brightness(float);
     callback set_lightbar_color(string);
     callback toggle_lightbar(bool);
     callback toggle_battery_limit(bool);
@@ -299,7 +297,13 @@ export component AppWindow inherits Window {
                     CustomSlider {
                         minimum: 0;
                         maximum: 100;
-                        value <=> root.fan_speed;
+                        value: root.fan_speed;
+                        changed(v) => {
+                            root.fan_speed = v;
+                        }
+                        released(v) => {
+                            root.fan_speed = v;
+                        }
                     }
                     Text {
                         text: "\{Math.round(root.fan_speed)}%";
@@ -395,7 +399,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Brightness slider with Smooth CustomSlider
+                // Brightness slider
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
@@ -408,12 +412,13 @@ export component AppWindow inherits Window {
                     CustomSlider {
                         minimum: 0;
                         maximum: 100;
-                        value <=> root.kb_brightness;
-                        changed(val) => {
-                            root.set_keyboard_brightness(val);
+                        value: root.kb_brightness;
+                        changed(v) => {
+                            root.kb_brightness = v;
+                            root.set_keyboard_brightness(v);
                         }
-                        released(val) => {
-                            root.save_keyboard_brightness(val);
+                        released(v) => {
+                            root.save_keyboard_brightness(v);
                         }
                     }
                     Text {

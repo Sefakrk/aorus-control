@@ -41,12 +41,67 @@ impl WindowsThermalController {
     }
 }
 
+pub fn fetch_telemetry() -> Result<TelemetryData, String> {
+    let script = r#"
+        $get = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($get) {
+            $cpu = (Invoke-CimMethod -InputObject $get -MethodName getCpuTemp -ErrorAction SilentlyContinue).Data
+            $gpu = (Invoke-CimMethod -InputObject $get -MethodName getGpuTemp1 -ErrorAction SilentlyContinue).Data
+            $rpm1 = (Invoke-CimMethod -InputObject $get -MethodName getRpm1 -ErrorAction SilentlyContinue).Data
+            $rpm2 = (Invoke-CimMethod -InputObject $get -MethodName getRpm2 -ErrorAction SilentlyContinue).Data
+            if ($cpu -ne $null -and $rpm1 -ne $null) {
+                Write-Output "$cpu,$gpu,$rpm1,$rpm2"
+            }
+        }
+    "#;
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        return Err("WMI telemetry query returned no data".to_string());
+    }
+
+    let parts: Vec<&str> = text.split(',').collect();
+    if parts.len() >= 4 {
+        let cpu = parts[0].trim().parse::<u8>().map_err(|e| e.to_string())?;
+        let gpu = parts[1].trim().parse::<u8>().map_err(|e| e.to_string())?;
+        let raw1 = parts[2].trim().parse::<u32>().map_err(|e| e.to_string())?;
+        let raw2 = parts[3].trim().parse::<u32>().map_err(|e| e.to_string())?;
+
+        let swap_rpm = |raw: u32| -> u16 {
+            if raw == 0 {
+                return 0;
+            }
+            let swapped = (((raw & 0xFF) << 8) | ((raw >> 8) & 0xFF)) as u16;
+            if swapped < 8000 {
+                swapped
+            } else {
+                raw as u16
+            }
+        };
+
+        Ok(TelemetryData {
+            cpu_temp: cpu,
+            gpu_temp: gpu,
+            fan1_rpm: swap_rpm(raw1),
+            fan2_rpm: swap_rpm(raw2),
+        })
+    } else {
+        Err("Incomplete telemetry data from WMI".to_string())
+    }
+}
+
 impl ThermalController for WindowsThermalController {
     fn set_fan_mode(&mut self, mode: FanMode) -> Result<(), String> {
         let script = match mode {
             FanMode::Quiet => {
                 r#"
-                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($set) {
                     Invoke-CimMethod -InputObject $set -MethodName SetFanModeNotify -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
                     Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
@@ -60,7 +115,7 @@ impl ThermalController for WindowsThermalController {
             }
             FanMode::Normal => {
                 r#"
-                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($set) {
                     Invoke-CimMethod -InputObject $set -MethodName SetFanModeNotify -Arguments @{ Data = [byte]1 } -ErrorAction SilentlyContinue | Out-Null
                     Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
@@ -74,7 +129,7 @@ impl ThermalController for WindowsThermalController {
             }
             FanMode::Gaming => {
                 r#"
-                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($set) {
                     Invoke-CimMethod -InputObject $set -MethodName SetFanModeNotify -Arguments @{ Data = [byte]2 } -ErrorAction SilentlyContinue | Out-Null
                     Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
@@ -88,7 +143,7 @@ impl ThermalController for WindowsThermalController {
             }
             FanMode::Turbo => {
                 r#"
-                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+                $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($set) {
                     Invoke-CimMethod -InputObject $set -MethodName SetFanModeNotify -Arguments @{ Data = [byte]3 } -ErrorAction SilentlyContinue | Out-Null
                     Invoke-CimMethod -InputObject $set -MethodName SetQuietMode -Arguments @{ Data = [byte]0 } -ErrorAction SilentlyContinue | Out-Null
@@ -117,7 +172,7 @@ impl ThermalController for WindowsThermalController {
 
         let script = format!(
             r#"
-            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($set) {{
                 Invoke-CimMethod -InputObject $set -MethodName SetTurboMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
                 Invoke-CimMethod -InputObject $set -MethodName SetQuietMode -Arguments @{{ Data = [byte]0 }} -ErrorAction SilentlyContinue | Out-Null
@@ -136,65 +191,14 @@ impl ThermalController for WindowsThermalController {
     }
 
     fn get_telemetry(&self) -> Result<TelemetryData, String> {
-        let script = r#"
-            $get = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Get -ErrorAction SilentlyContinue
-            if ($get) {
-                $cpu = (Invoke-CimMethod -InputObject $get -MethodName getCpuTemp -ErrorAction SilentlyContinue).Data
-                $gpu = (Invoke-CimMethod -InputObject $get -MethodName getGpuTemp1 -ErrorAction SilentlyContinue).Data
-                $rpm1 = (Invoke-CimMethod -InputObject $get -MethodName getRpm1 -ErrorAction SilentlyContinue).Data
-                $rpm2 = (Invoke-CimMethod -InputObject $get -MethodName getRpm2 -ErrorAction SilentlyContinue).Data
-                Write-Output "$cpu,$gpu,$rpm1,$rpm2"
-            }
-        "#;
-
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let parts: Vec<&str> = text.split(',').collect();
-
-        if parts.len() >= 4 {
-            let cpu = parts[0].trim().parse::<u8>().unwrap_or(50);
-            let gpu = parts[1].trim().parse::<u8>().unwrap_or(45);
-            let raw1 = parts[2].trim().parse::<u32>().unwrap_or(0);
-            let raw2 = parts[3].trim().parse::<u32>().unwrap_or(0);
-
-            let swap_rpm = |raw: u32| -> u16 {
-                if raw == 0 {
-                    return 0;
-                }
-                let swapped = (((raw & 0xFF) << 8) | ((raw >> 8) & 0xFF)) as u16;
-                if swapped < 8000 {
-                    swapped
-                } else {
-                    raw as u16
-                }
-            };
-
-            Ok(TelemetryData {
-                cpu_temp: cpu,
-                gpu_temp: gpu,
-                fan1_rpm: swap_rpm(raw1),
-                fan2_rpm: swap_rpm(raw2),
-            })
-        } else {
-            Ok(TelemetryData {
-                cpu_temp: 50,
-                gpu_temp: 45,
-                fan1_rpm: 2200,
-                fan2_rpm: 2200,
-            })
-        }
+        fetch_telemetry()
     }
 
     fn set_battery_charge_limit(&mut self, enabled: bool) -> Result<(), String> {
         let charge_value = if enabled { 80 } else { 100 };
         let script = format!(
             r#"
-            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue
+            $set = Get-CimInstance -Namespace root/wmi -ClassName GB_WMIACPI_Set -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($set) {{
                 Invoke-CimMethod -InputObject $set -MethodName SetMaxCharge -Arguments @{{ Data = [byte]{} }} -ErrorAction SilentlyContinue | Out-Null
             }}
@@ -222,7 +226,6 @@ pub struct WindowsLightingController {
 
 impl WindowsLightingController {
     pub fn new() -> Self {
-        // Enumerate HID devices ONCE on startup and cache paths
         let all_paths = unsafe { get_hid_device_paths() };
         let mut kb_paths = Vec::new();
         let mut bar_paths = Vec::new();
@@ -253,7 +256,6 @@ impl LightingController for WindowsLightingController {
 
         match zone {
             RgbZone::Keyboard => {
-                // Deduplicate redundant packet writes
                 if self.last_kb_color == Some(color) && self.last_kb_brightness == Some(brightness) {
                     return Ok(());
                 }
@@ -271,7 +273,6 @@ impl LightingController for WindowsLightingController {
                 }
             }
             RgbZone::RearBar => {
-                // Deduplicate redundant packet writes
                 if self.last_bar_color == Some(color) && self.last_bar_brightness == Some(brightness) {
                     return Ok(());
                 }

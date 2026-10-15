@@ -72,13 +72,13 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 5. Keyboard Brightness Live Drag Callback (Zero disk I/O, fast lighting update)
+    // 5. Keyboard Brightness Live Drag Callback (Fast lighting update, zero disk I/O)
     {
         let lc_clone = lighting_controller.clone();
         let cfg_clone = config.clone();
 
         main_window.on_set_keyboard_brightness(move |val| {
-            let br = val.clamp(0, 100) as u8;
+            let br = val.clamp(0.0, 100.0) as u8;
             let color = cfg_clone.lock().kb_color;
 
             let mut lc = lc_clone.lock();
@@ -86,12 +86,12 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 6. Keyboard Brightness Save Callback (Saves to disk only on release)
+    // 6. Keyboard Brightness Save Callback (Saves to disk only on slider release)
     {
         let cfg_clone = config.clone();
 
         main_window.on_save_keyboard_brightness(move |val| {
-            let br = val.clamp(0, 100) as u8;
+            let br = val.clamp(0.0, 100.0) as u8;
             let mut cfg = cfg_clone.lock();
             cfg.kb_brightness = br;
             let _ = cfg.save();
@@ -199,31 +199,28 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // 12. Non-blocking Background Telemetry Thread
-    // Does not block UI thread; updates via slint::invoke_from_event_loop
+    // Does NOT hold the thermal_controller Mutex lock during WMI execution
+    // Sleep is at the END of the loop so initial telemetry appears instantly
     {
-        let tc_clone = thermal_controller.clone();
         let window_weak = main_window.as_weak();
 
         std::thread::spawn(move || {
             loop {
-                std::thread::sleep(Duration::from_millis(2000));
-
-                let telemetry_opt = {
-                    let tc = tc_clone.lock();
-                    tc.get_telemetry().ok()
-                };
-
-                if let Some(telemetry) = telemetry_opt {
+                // Fetch directly without locking the ThermalController mutex
+                if let Ok(telemetry) = hal::windows::fetch_telemetry() {
                     let weak = window_weak.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(window) = weak.upgrade() {
-                            window.set_cpu_temp(format!("{} °C", telemetry.cpu_temp).into());
-                            window.set_gpu_temp(format!("{} °C", telemetry.gpu_temp).into());
+                            window.set_cpu_temp(format!("{} \u{00B0}C", telemetry.cpu_temp).into());
+                            window.set_gpu_temp(format!("{} \u{00B0}C", telemetry.gpu_temp).into());
                             let rpm = if telemetry.fan1_rpm > 0 { telemetry.fan1_rpm } else { telemetry.fan2_rpm };
                             window.set_fan_rpm(format!("{} RPM", rpm).into());
                         }
                     });
                 }
+
+                // Sleep at the end of the loop
+                std::thread::sleep(Duration::from_millis(2000));
             }
         });
     }
